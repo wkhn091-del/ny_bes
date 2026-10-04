@@ -3,7 +3,7 @@
 import { clsx } from 'clsx';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useEffect, useRef, useState, useSyncExternalStore, type RefObject } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { formatDateHebrew, formatMinutes } from '@/lib/domain/time';
 import { SPACE_TYPE_LABELS } from '@/lib/domain/types';
 import type { LiveFloor, LiveSpace } from './floor-types';
@@ -24,7 +24,9 @@ function MapLoading() {
   );
 }
 
-const FloorMap3D = dynamic(() => import('./FloorMap3D'), {
+const loadFloorMap3D = () => import('./FloorMap3D');
+
+const FloorMap3D = dynamic(loadFloorMap3D, {
   ssr: false,
   loading: () => <MapLoading />,
 });
@@ -68,38 +70,40 @@ function use3DCapable(): boolean {
   );
 }
 
-/**
- * Holds the 3D back until the map is near the viewport and the browser is idle, so the hero, search and
- * LCP image never compete with WebGL setup (on phones the map starts below the fold).
- */
-function useDeferredMount(enabled: boolean, target: RefObject<HTMLElement | null>): boolean {
-  const [ready, setReady] = useState(false);
+/** Starts downloading the 3D chunk (and, through its module-level preload, the model) right after hydration. */
+function usePrefetch3D(enabled: boolean): void {
   useEffect(() => {
-    const el = target.current;
-    if (!enabled || ready || !el) return;
-    let idleId: number | undefined;
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const schedule = () => {
-      const done = () => setReady(true);
-      if (typeof window.requestIdleCallback === 'function') idleId = window.requestIdleCallback(done, { timeout: 2500 });
-      else timeoutId = setTimeout(done, 1200);
-    };
+    if (!enabled) return;
+    const start = () => void loadFloorMap3D();
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(start, { timeout: 300 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(start, 0);
+    return () => clearTimeout(id);
+  }, [enabled]);
+}
+
+/**
+ * Mounts the 3D once the stage is near the viewport (on phones the map starts below the fold).
+ * Takes the element itself, not a ref: the stage only exists after the live data arrives.
+ */
+function useNearViewport(enabled: boolean, el: HTMLElement | null): boolean {
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    if (!enabled || near || !el) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry?.isIntersecting) return;
         observer.disconnect();
-        schedule();
+        setNear(true);
       },
-      { rootMargin: '200px' },
+      { rootMargin: '300px' },
     );
     observer.observe(el);
-    return () => {
-      observer.disconnect();
-      if (idleId !== undefined) window.cancelIdleCallback(idleId);
-      if (timeoutId !== undefined) clearTimeout(timeoutId);
-    };
-  }, [enabled, ready, target]);
-  return ready;
+    return () => observer.disconnect();
+  }, [enabled, near, el]);
+  return near;
 }
 
 export function spaceStatus(space: LiveSpace, floor: Pick<LiveFloor, 'isOpen' | 'at'>): { free: number; label: string; available: boolean } {
@@ -121,8 +125,9 @@ export function FloorMap({ initial }: { initial: LiveFloor | null }) {
   const [failed, setFailed] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(initial ? new Date() : null);
   const capable3D = use3DCapable();
-  const stageRef = useRef<HTMLDivElement>(null);
-  const idle = useDeferredMount(capable3D, stageRef);
+  const [stage, setStage] = useState<HTMLDivElement | null>(null);
+  usePrefetch3D(capable3D);
+  const visible = useNearViewport(capable3D, stage);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,10 +193,10 @@ export function FloorMap({ initial }: { initial: LiveFloor | null }) {
         </div>
       </figcaption>
 
-      <div ref={stageRef} className="relative min-h-[280px] flex-1" aria-hidden={capable3D ? 'true' : undefined}>
+      <div ref={setStage} className="relative min-h-[280px] flex-1" aria-hidden={capable3D ? 'true' : undefined}>
         {!capable3D ? (
           <FloorMap2D floor={floor} />
-        ) : idle ? (
+        ) : visible ? (
           <FloorMap3D floor={floor} statusOf={(space) => spaceStatus(space, floor).label} />
         ) : (
           <MapLoading />

@@ -101,7 +101,9 @@ for (const env of ['preview', 'production']) {
 }
 
 const localPath = join(root, '.env.local');
-const localText = existsSync(localPath) ? readFileSync(localPath, 'utf8') : readFileSync(join(root, '.env.example'), 'utf8');
+const localText = existsSync(localPath)
+  ? readFileSync(localPath, 'utf8')
+  : readFileSync(join(root, '.env.example'), 'utf8').replace(/^(STRIPE_SECRET_KEY=sk_test_|STRIPE_WEBHOOK_SECRET=whsec_)$/gm, (line) => line.split('=')[0] + '=');
 const local = fill(parseEnv(localText));
 const merged = localText
   .split(/\r?\n/)
