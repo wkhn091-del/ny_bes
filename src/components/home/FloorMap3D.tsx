@@ -1,8 +1,9 @@
 'use client';
 
-import { Environment, Html, Lightformer, Merged, PerformanceMonitor, RoundedBox, Sparkles, useGLTF, useProgress } from '@react-three/drei';
+import { ContactShadows, Environment, Html, Lightformer, Merged, PerformanceMonitor, RoundedBox, Sparkles, useGLTF, useProgress } from '@react-three/drei';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Moon, Sun, Sunset } from 'lucide-react';
+import { clsx } from 'clsx';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import {
@@ -58,6 +59,10 @@ interface Palette {
   envIntensity: number;
   sun: number;
   hemi: number;
+  wall: string;
+  fabric: string;
+  rug: string;
+  wood: string;
 }
 
 const PALETTES: Record<'light' | 'dark', Palette> = {
@@ -75,6 +80,10 @@ const PALETTES: Record<'light' | 'dark', Palette> = {
     envIntensity: 0.9,
     sun: 2.2,
     hemi: 0.55,
+    wall: '#eeebe6',
+    fabric: '#c9c2b8',
+    rug: '#ddd5c8',
+    wood: '#c49a6c',
   },
   dark: {
     slab: '#26262c',
@@ -90,6 +99,10 @@ const PALETTES: Record<'light' | 'dark', Palette> = {
     envIntensity: 0.45,
     sun: 1.1,
     hemi: 0.3,
+    wall: '#2e2d33',
+    fabric: '#46434d',
+    rug: '#2a2731',
+    wood: '#7a5a3c',
   },
 };
 
@@ -771,13 +784,214 @@ function DeskUnit({ desk, order, palette, onOpen }: { desk: Desk; order: number;
   );
 }
 
+// ---------- building shell & lounge (architectural context, no data) ----------
+
+const EXT_H = 1.35;
+const SILL_H = 0.16;
+const HEAD_H = 0.14;
+const EXT_T = 0.08;
+const LOUNGE_D = 1.7;
+
+/** A window wall along local X: sill, full-height glazing with mullions, header. */
+function WindowWall({ length, palette, night }: { length: number; palette: Palette; night: boolean }) {
+  const glassH = EXT_H - SILL_H - HEAD_H;
+  const bays = Math.max(2, Math.round(length / 1.15));
+  return (
+    <group>
+      <mesh position={[0, SILL_H / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[length, SILL_H, EXT_T]} />
+        <meshStandardMaterial color={palette.wall} roughness={0.85} />
+      </mesh>
+      <mesh position={[0, EXT_H - HEAD_H / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[length, HEAD_H, EXT_T]} />
+        <meshStandardMaterial color={palette.wall} roughness={0.85} />
+      </mesh>
+      <mesh position={[0, SILL_H + glassH / 2, 0]}>
+        <boxGeometry args={[length, glassH, 0.012]} />
+        <meshPhysicalMaterial
+          color={night ? '#1e2a4d' : '#d6e6f5'}
+          transparent
+          opacity={night ? 0.42 : 0.2}
+          roughness={0.04}
+          clearcoat={1}
+          envMapIntensity={1.6}
+          depthWrite={false}
+        />
+      </mesh>
+      {Array.from({ length: bays + 1 }, (_, i) => (
+        <mesh key={i} position={[-length / 2 + (length * i) / bays, SILL_H + glassH / 2, 0]} castShadow>
+          <boxGeometry args={[0.035, glassH, EXT_T * 0.7]} />
+          <meshStandardMaterial color="#2b2b30" metalness={0.7} roughness={0.35} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** Cut-away corner of the building: the two far walls are glazed, the near sides stay open for the view. */
+function BuildingShell({ slabW, slabD, slabZ, palette, night }: { slabW: number; slabD: number; slabZ: number; palette: Palette; night: boolean }) {
+  const backZ = slabZ - slabD / 2 + EXT_T / 2;
+  const leftX = -slabW / 2 + EXT_T / 2;
+  return (
+    <group>
+      <group position={[0, 0, backZ]}>
+        <WindowWall length={slabW} palette={palette} night={night} />
+      </group>
+      <group position={[leftX, 0, slabZ]} rotation={[0, Math.PI / 2, 0]}>
+        <WindowWall length={slabD} palette={palette} night={night} />
+      </group>
+      <mesh position={[leftX + 0.05, EXT_H / 2, backZ + 0.05]} castShadow receiveShadow>
+        <boxGeometry args={[0.22, EXT_H, 0.22]} />
+        <meshStandardMaterial color={palette.slabSide} roughness={0.9} />
+      </mesh>
+    </group>
+  );
+}
+
+function Sofa({ position, palette }: { position: [number, number, number]; palette: Palette }) {
+  return (
+    <group position={position}>
+      <RoundedBox args={[1.6, 0.2, 0.55]} radius={0.05} position={[0, 0.17, 0]} castShadow receiveShadow>
+        <meshStandardMaterial color={palette.fabric} roughness={0.95} />
+      </RoundedBox>
+      <RoundedBox args={[1.6, 0.34, 0.14]} radius={0.05} position={[0, 0.36, -0.21]} castShadow>
+        <meshStandardMaterial color={palette.fabric} roughness={0.95} />
+      </RoundedBox>
+      {[-0.74, 0.74].map((x) => (
+        <RoundedBox key={x} args={[0.13, 0.3, 0.55]} radius={0.04} position={[x, 0.26, 0]} castShadow>
+          <meshStandardMaterial color={palette.fabric} roughness={0.95} />
+        </RoundedBox>
+      ))}
+      {[-0.4, 0.38].map((x, i) => (
+        <RoundedBox key={x} args={[0.32, 0.24, 0.08]} radius={0.03} position={[x, 0.38, -0.12]} rotation={[-0.25, 0, i ? 0.12 : -0.08]} castShadow>
+          <meshStandardMaterial color={i ? '#e7dfd2' : '#8b7bb8'} roughness={0.9} />
+        </RoundedBox>
+      ))}
+    </group>
+  );
+}
+
+function Armchair({ position, rotation, palette }: { position: [number, number, number]; rotation: number; palette: Palette }) {
+  return (
+    <group position={position} rotation={[0, rotation, 0]}>
+      <RoundedBox args={[0.55, 0.2, 0.5]} radius={0.05} position={[0, 0.17, 0]} castShadow receiveShadow>
+        <meshStandardMaterial color="#b9a58a" roughness={0.9} />
+      </RoundedBox>
+      <RoundedBox args={[0.55, 0.3, 0.12]} radius={0.05} position={[0, 0.34, -0.2]} castShadow>
+        <meshStandardMaterial color="#b9a58a" roughness={0.9} />
+      </RoundedBox>
+      {[-0.25, 0.25].map((x) => (
+        <mesh key={x} position={[x, 0.04, 0]} castShadow>
+          <boxGeometry args={[0.03, 0.08, 0.4]} />
+          <meshStandardMaterial color={palette.deskLeg} metalness={0.6} roughness={0.4} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** Lounge, coffee bar and a phone booth along the back windows, so the floor reads as a real workplace. */
+function Lounge({ slabW, backZ, palette, night }: { slabW: number; backZ: number; palette: Palette; night: boolean }) {
+  const counterL = Math.min(2.4, slabW * 0.3);
+  const counterX = -slabW / 2 + 0.7 + counterL / 2;
+  const counterZ = backZ + EXT_T + 0.32;
+  const loungeX = Math.min(slabW / 2 - 1.6, counterX + counterL / 2 + 1.5);
+  const sofaZ = backZ + EXT_T + 0.34;
+  const stools = Math.max(2, Math.floor(counterL / 0.6));
+  const counterLamps = Math.max(1, Math.round(counterL / 0.9));
+  return (
+    <group>
+      <RoundedBox args={[counterL, 0.44, 0.55]} radius={0.02} position={[counterX, 0.22, counterZ]} castShadow receiveShadow>
+        <meshStandardMaterial color={palette.wall} roughness={0.6} />
+      </RoundedBox>
+      <mesh position={[counterX, 0.46, counterZ + 0.02]} castShadow receiveShadow>
+        <boxGeometry args={[counterL + 0.06, 0.04, 0.62]} />
+        <meshStandardMaterial color={palette.wood} roughness={0.45} />
+      </mesh>
+      <mesh position={[counterX - counterL / 2 + 0.25, 0.56, counterZ - 0.1]} castShadow>
+        <boxGeometry args={[0.18, 0.16, 0.18]} />
+        <meshStandardMaterial color="#1f1f23" metalness={0.5} roughness={0.3} />
+      </mesh>
+      {Array.from({ length: stools }, (_, i) => {
+        const x = counterX - counterL / 2 + (counterL * (i + 0.5)) / stools;
+        return (
+          <group key={i} position={[x, 0, counterZ + 0.52]}>
+            <mesh position={[0, 0.36, 0]} castShadow>
+              <cylinderGeometry args={[0.11, 0.11, 0.04, 20]} />
+              <meshStandardMaterial color={palette.wood} roughness={0.5} />
+            </mesh>
+            <mesh position={[0, 0.17, 0]} castShadow>
+              <cylinderGeometry args={[0.015, 0.015, 0.34, 8]} />
+              <meshStandardMaterial color="#27272a" metalness={0.7} roughness={0.3} />
+            </mesh>
+            <mesh position={[0, 0.005, 0]}>
+              <cylinderGeometry args={[0.09, 0.09, 0.01, 16]} />
+              <meshStandardMaterial color="#27272a" metalness={0.7} roughness={0.3} />
+            </mesh>
+          </group>
+        );
+      })}
+      {Array.from({ length: counterLamps }, (_, i) => (
+        <PendantLamp key={i} position={[counterX + (i - (counterLamps - 1) / 2) * 0.9, 0.95, counterZ + 0.05]} on={night} />
+      ))}
+
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[loungeX, 0.009, sofaZ + 0.6]} receiveShadow>
+        <planeGeometry args={[2.3, 1.25]} />
+        <meshStandardMaterial color={palette.rug} roughness={1} />
+      </mesh>
+      <Sofa position={[loungeX, 0, sofaZ]} palette={palette} />
+      <group position={[loungeX, 0, sofaZ + 0.68]}>
+        <mesh position={[0, 0.22, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.3, 0.3, 0.035, 32]} />
+          <meshStandardMaterial color={palette.wood} roughness={0.4} />
+        </mesh>
+        <mesh position={[0, 0.1, 0]} castShadow>
+          <cylinderGeometry args={[0.04, 0.12, 0.2, 16]} />
+          <meshStandardMaterial color="#27272a" metalness={0.6} roughness={0.35} />
+        </mesh>
+        <mesh position={[0.08, 0.26, 0.04]} castShadow>
+          <boxGeometry args={[0.2, 0.03, 0.14]} />
+          <meshStandardMaterial color="#e9e4dc" roughness={0.8} />
+        </mesh>
+      </group>
+      <Armchair position={[loungeX + 0.95, 0, sofaZ + 0.85]} rotation={-Math.PI * 0.75} palette={palette} />
+      {night && <pointLight position={[loungeX, 0.9, sofaZ + 0.5]} intensity={1.4} distance={3.2} color="#ffcf8a" />}
+
+      {slabW > 7 && (
+        <group position={[slabW / 2 - 0.55, 0, backZ + EXT_T + 0.38]}>
+          <RoundedBox args={[0.62, 0.05, 0.62]} radius={0.02} position={[0, 0.025, 0]} receiveShadow>
+            <meshStandardMaterial color="#27272a" roughness={0.6} />
+          </RoundedBox>
+          <RoundedBox args={[0.62, 0.06, 0.62]} radius={0.02} position={[0, 0.97, 0]} castShadow>
+            <meshStandardMaterial color="#27272a" roughness={0.6} />
+          </RoundedBox>
+          <mesh position={[0, 0.5, 0]}>
+            <boxGeometry args={[0.6, 0.9, 0.6]} />
+            <meshPhysicalMaterial color="#cfe0ee" transparent opacity={0.22} roughness={0.05} clearcoat={1} depthWrite={false} />
+          </mesh>
+          <mesh position={[0, 0.5, -0.27]} castShadow>
+            <boxGeometry args={[0.58, 0.9, 0.04]} />
+            <meshStandardMaterial color="#6b5b95" roughness={0.95} />
+          </mesh>
+          <mesh position={[0, 0.4, -0.1]} castShadow>
+            <boxGeometry args={[0.3, 0.03, 0.18]} />
+            <meshStandardMaterial color={palette.wood} roughness={0.5} />
+          </mesh>
+        </group>
+      )}
+      <Plant position={[-slabW / 2 + 0.3, 0, backZ + EXT_T + 0.3]} scale={1.7} />
+      <Plant position={[loungeX - 1.05, 0, sofaZ]} scale={1.3} />
+    </group>
+  );
+}
+
 interface CameraBase {
   position: Vector3;
   zoom: number;
 }
 
 /** Fits the whole floor into the canvas for any aspect ratio and records that framing as the rest pose. */
-function FitCamera({ width, depth, baseRef }: { width: number; depth: number; baseRef: RefObject<CameraBase | null> }) {
+function FitCamera({ width, zMin, zMax, baseRef }: { width: number; zMin: number; zMax: number; baseRef: RefObject<CameraBase | null> }) {
   const getState = useThree((s) => s.get);
   const size = useThree((s) => s.size);
   useLayoutEffect(() => {
@@ -790,11 +1004,10 @@ function FitCamera({ width, depth, baseRef }: { width: number; depth: number; ba
     let maxX = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
-    const hw = width / 2 + 0.4;
-    const hd = depth / 2 + 0.4;
+    const hw = width / 2 + 0.2;
     for (const x of [-hw, hw]) {
-      for (const y of [0, WALL_H + 0.8]) {
-        for (const z of [-hd, hd]) {
+      for (const y of [-0.25, EXT_H + 0.35]) {
+        for (const z of [zMin - 0.2, zMax + 0.2]) {
           const v = new Vector3(x, y, z).applyMatrix4(inv);
           minX = Math.min(minX, v.x);
           maxX = Math.max(maxX, v.x);
@@ -810,7 +1023,7 @@ function FitCamera({ width, depth, baseRef }: { width: number; depth: number; ba
     camera.zoom = Math.min(size.width / (maxX - minX), size.height / (maxY - minY)) * 0.94;
     camera.updateProjectionMatrix();
     baseRef.current = { position: camera.position.clone(), zoom: camera.zoom };
-  }, [getState, size, width, depth, baseRef]);
+  }, [getState, size, width, zMin, zMax, baseRef]);
   return null;
 }
 
@@ -886,14 +1099,18 @@ function Scene({
   const beam = dark || night ? 0.32 : 0.2;
   const deskSpace = floor.spaces.find((s) => s.type === 'hotDesk');
   const slabW = layout.width + 0.6;
-  const slabD = layout.depth + 0.6;
+  const workD = layout.depth + 0.6;
+  const frontZ = 0.25 + workD / 2;
+  const slabD = workD + LOUNGE_D;
+  const backZ = frontZ - slabD;
+  const slabZ = (frontZ + backZ) / 2;
   const floorRepeat = useMemo<[number, number]>(() => [slabW / 2.2, slabD / 2.2], [slabW, slabD]);
   const floorTexture = useFloorTexture(dark, floorRepeat);
   const extent = Math.max(slabW, slabD);
 
   return (
     <>
-      <FitCamera width={layout.width} depth={layout.depth} baseRef={cameraBase} />
+      <FitCamera width={slabW} zMin={backZ} zMax={frontZ} baseRef={cameraBase} />
       <FocusRig baseRef={cameraBase} target={focus} />
       <directionalLight
         position={[extent * sky.dir[0], extent * sky.dir[1], extent * sky.dir[2]]}
@@ -911,19 +1128,24 @@ function Scene({
         shadow-camera-far={extent * 4}
       />
       <Sway frozen={focus !== null}>
-        <Sparkles
-          count={night || dark ? 48 : 32}
-          scale={[slabW * 0.9, 1.6, slabD * 0.9]}
-          position={[0, 0.95, 0.25]}
-          size={night || dark ? 2.2 : 1.6}
-          speed={0.22}
-          opacity={night || dark ? 0.75 : 0.5}
-          color={night || dark ? '#c4b5fd' : '#8b5cf6'}
-        />
-        <RoundedBox args={[slabW, 0.24, slabD]} radius={0.1} position={[0, -0.12, 0.25]} receiveShadow>
+        <ContactShadows position={[0, -0.25, slabZ]} scale={[slabW * 1.5, slabD * 1.5]} opacity={dark ? 0.6 : 0.32} blur={2.8} far={0.6} frames={1} resolution={512} />
+        {sky.phase !== 'day' && (
+          <Sparkles
+            count={28}
+            scale={[slabW * 0.9, 1.2, slabD * 0.9]}
+            position={[0, 0.8, slabZ]}
+            size={1.4}
+            speed={0.15}
+            opacity={0.35}
+            color={night ? '#dbe4ff' : '#fff1d6'}
+          />
+        )}
+        <RoundedBox args={[slabW, 0.24, slabD]} radius={0.06} position={[0, -0.12, slabZ]} receiveShadow castShadow>
           <meshStandardMaterial color={palette.slabSide} roughness={0.8} />
         </RoundedBox>
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, 0.25]} receiveShadow>
+        <BuildingShell slabW={slabW} slabD={slabD} slabZ={slabZ} palette={palette} night={night} />
+        <Lounge slabW={slabW} backZ={backZ} palette={palette} night={night} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.001, slabZ]} receiveShadow>
           <planeGeometry args={[slabW - 0.12, slabD - 0.12]} />
           <meshStandardMaterial map={floorTexture} color={palette.slab} roughness={dark ? 0.32 : 0.62} metalness={0} envMapIntensity={dark ? 1.2 : 0.6} />
         </mesh>
@@ -973,6 +1195,48 @@ function StudioEnvironment({ intensity }: { intensity: number }) {
       <Lightformer form="rect" intensity={1.2} position={[-6, 2, 3]} rotation-y={Math.PI / 2} scale={[8, 3, 1]} />
       <Lightformer form="rect" intensity={0.8} color="#c4b5fd" position={[6, 2, -3]} rotation-y={-Math.PI / 2} scale={[8, 3, 1]} />
     </Environment>
+  );
+}
+
+const SKY_GRADIENT: Record<SkyPhase, { light: string; dark: string }> = {
+  day: { light: 'linear-gradient(180deg,#cfe3f6 0%,#e9f1f8 45%,#f6f2ec 100%)', dark: 'linear-gradient(180deg,#141a26 0%,#1a1d27 55%,#121216 100%)' },
+  golden: { light: 'linear-gradient(180deg,#f3c9a4 0%,#f6dcc6 40%,#efe6f2 100%)', dark: 'linear-gradient(180deg,#3a2433 0%,#2a2030 50%,#141216 100%)' },
+  night: { light: 'linear-gradient(180deg,#0d1530 0%,#1c2350 55%,#2b2350 100%)', dark: 'linear-gradient(180deg,#070b1a 0%,#11163a 55%,#1b1638 100%)' },
+};
+
+/** Deterministic skyline so the backdrop never changes between renders. */
+const SKYLINE = (() => {
+  const rand = seededRandom(42);
+  const towers: { x: number; w: number; h: number; lit: number[] }[] = [];
+  for (let x = 0; x < 400; ) {
+    const w = 10 + Math.floor(rand() * 18);
+    const h = 18 + Math.floor(rand() * (rand() > 0.85 ? 70 : 38));
+    const lit = Array.from({ length: Math.floor(h / 9) }, () => (rand() > 0.6 ? 1 : 0));
+    towers.push({ x, w, h, lit });
+    x += w + 1 + Math.floor(rand() * 3);
+  }
+  return towers;
+})();
+
+/** Sky for the real Israel time of day plus a soft city skyline, behind the transparent canvas. */
+function SkyBackdrop({ phase, dark }: { phase: SkyPhase; dark: boolean }) {
+  const night = phase === 'night';
+  const tower = night ? '#0a1024' : dark ? '#20222c' : phase === 'golden' ? '#d9b9a8' : '#c9d6e3';
+  return (
+    <div className="absolute inset-0" style={{ background: SKY_GRADIENT[phase][dark ? 'dark' : 'light'] }} aria-hidden="true">
+      <svg className="absolute inset-x-0 bottom-[18%] h-[38%] w-full opacity-70" viewBox="0 0 400 110" preserveAspectRatio="xMidYMax slice">
+        {SKYLINE.map((t) => (
+          <g key={t.x}>
+            <rect x={t.x} y={110 - t.h} width={t.w} height={t.h} fill={tower} />
+            {night &&
+              t.lit.map((on, i) =>
+                on ? <rect key={i} x={t.x + 3} y={110 - t.h + 4 + i * 9} width={t.w - 6} height={2} fill="#ffd89a" opacity={0.55} /> : null,
+              )}
+          </g>
+        ))}
+      </svg>
+      <div className={clsx('absolute inset-x-0 bottom-0 h-[30%]', dark || night ? 'bg-gradient-to-t from-black/40' : 'bg-gradient-to-t from-white/70')} />
+    </div>
   );
 }
 
@@ -1041,6 +1305,7 @@ export default function FloorMap3D({ floor, statusOf }: { floor: LiveFloor; stat
       }}
       onPointerLeave={() => restSoon(HOVER_LINGER_MS)}
     >
+      <SkyBackdrop phase={sky.phase} dark={dark} />
       <Canvas
         orthographic
         shadows="soft"

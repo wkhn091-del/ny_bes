@@ -141,7 +141,7 @@ export default async function HomePage() {
               </li>
             </ul>
           </div>
-          <div className="h-[460px] sm:h-[500px] lg:h-[560px]">
+          <div className="h-[430px] sm:h-[500px] lg:h-[560px]">
             {mapLayouts.length > 0 && <FloorMap layouts={mapLayouts} />}
           </div>
         </div>
