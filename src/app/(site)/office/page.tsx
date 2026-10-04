@@ -3,8 +3,8 @@ import { DeskShowcase } from '@/components/office/DeskShowcase';
 import { ButtonLink } from '@/components/ui/Button';
 
 export const metadata: Metadata = {
-  title: 'עמדת עבודה בתלת־ממד',
-  description: 'הדמיה תלת־ממדית של עמדת עבודה. סובבו, התקרבו, ואז בדקו אילו עמדות פנויות היום.',
+  title: 'משרד פרטי בתלת־ממד',
+  description: 'היכנסו להדמיה תלת־ממדית של משרד פרטי: הסתכלו מסביב, הסתובבו בחדר, ואז בדקו מה פנוי היום.',
   alternates: { canonical: '/office' },
 };
 
@@ -14,15 +14,17 @@ export default function OfficePage() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 id="office-title" className="text-3xl font-bold tracking-tight sm:text-4xl">
-            עמדת עבודה, מכל זווית
+            היכנסו למשרד
           </h1>
-          <p className="mt-2 max-w-xl text-muted">הדמיה של עמדה. סובבו והתקרבו, ואז בדקו מה פנוי היום בסניף שנוח לכם.</p>
+          <p className="mt-2 max-w-xl text-muted">
+            הדמיה של משרד פרטי. נכנסים בדלת, מסתכלים מסביב ומסתובבים בחדר, ואז בודקים מה פנוי היום בסניף שנוח לכם.
+          </p>
         </div>
-        <ButtonLink href="/spaces?type=hotDesk">לעמדות הפנויות</ButtonLink>
+        <ButtonLink href="/spaces?type=privateOffice">למשרדים הפנויים</ButtonLink>
       </div>
-      <DeskShowcase className="h-[min(72vh,680px)] min-h-[420px]" />
+      <DeskShowcase className="h-[min(78vh,760px)] min-h-[460px]" />
       <p className="mt-3 text-xs text-muted">
-        ההדמיה ממחישה עמדת עבודה. הציוד בכל סניף מפורט בעמוד החלל.
+        ההדמיה ממחישה משרד פרטי. המידות, הריהוט והציוד בכל סניף מפורטים בעמוד החלל.
       </p>
     </section>
   );
