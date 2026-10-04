@@ -786,7 +786,7 @@ function DeskUnit({ desk, order, palette, onOpen }: { desk: Desk; order: number;
 
 // ---------- building shell & lounge (architectural context, no data) ----------
 
-const EXT_H = 1.35;
+const EXT_H = 1.6;
 const SILL_H = 0.16;
 const HEAD_H = 0.14;
 const EXT_T = 0.08;
@@ -811,7 +811,7 @@ function WindowWall({ length, palette, night }: { length: number; palette: Palet
         <meshPhysicalMaterial
           color={night ? '#1e2a4d' : '#d6e6f5'}
           transparent
-          opacity={night ? 0.42 : 0.2}
+          opacity={night ? 0.45 : 0.3}
           roughness={0.04}
           clearcoat={1}
           envMapIntensity={1.6}
@@ -1224,7 +1224,7 @@ function SkyBackdrop({ phase, dark }: { phase: SkyPhase; dark: boolean }) {
   const tower = night ? '#0a1024' : dark ? '#20222c' : phase === 'golden' ? '#d9b9a8' : '#c9d6e3';
   return (
     <div className="absolute inset-0" style={{ background: SKY_GRADIENT[phase][dark ? 'dark' : 'light'] }} aria-hidden="true">
-      <svg className="absolute inset-x-0 bottom-[18%] h-[38%] w-full opacity-70" viewBox="0 0 400 110" preserveAspectRatio="xMidYMax slice">
+      <svg className="absolute inset-x-0 top-[6%] h-[30%] w-full opacity-60" viewBox="0 0 400 110" preserveAspectRatio="xMidYMax slice">
         {SKYLINE.map((t) => (
           <g key={t.x}>
             <rect x={t.x} y={110 - t.h} width={t.w} height={t.h} fill={tower} />
@@ -1235,7 +1235,12 @@ function SkyBackdrop({ phase, dark }: { phase: SkyPhase; dark: boolean }) {
           </g>
         ))}
       </svg>
-      <div className={clsx('absolute inset-x-0 bottom-0 h-[30%]', dark || night ? 'bg-gradient-to-t from-black/40' : 'bg-gradient-to-t from-white/70')} />
+      <div
+        className={clsx(
+          'absolute inset-x-0 bottom-0 top-[36%]',
+          dark || night ? 'bg-gradient-to-b from-[#1b1d26] to-[#101116]' : 'bg-gradient-to-b from-[#e7e2da] to-[#f4f1ec]',
+        )}
+      />
     </div>
   );
 }
