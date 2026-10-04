@@ -42,6 +42,7 @@ export function Boxes({
   y,
   exclude = null,
   offset,
+  renderOrder = 0,
   children,
 }: {
   items: Item[];
@@ -49,6 +50,7 @@ export function Boxes({
   y: number;
   exclude?: number | null;
   offset?: (it: Item) => Item;
+  renderOrder?: number;
   children: ReactNode;
 }) {
   const ref = useRef<InstancedMesh>(null);
@@ -61,12 +63,15 @@ export function Boxes({
     mesh.instanceMatrix.needsUpdate = true;
   }, [list, y, size, offset]);
   return (
-    <instancedMesh ref={ref} args={[undefined, undefined, Math.max(1, items.length)]} frustumCulled={false}>
+    <instancedMesh ref={ref} args={[undefined, undefined, Math.max(1, items.length)]} frustumCulled={false} renderOrder={renderOrder}>
       <boxGeometry args={[1, 1, 1]} />
       {children}
     </instancedMesh>
   );
 }
+
+/** Fixed draw order for see-through layers inside the tower (its facade glass draws last), so they never swap places and flicker as the camera turns. */
+export const GLASS_ORDER = { interior: 1, booth: 2 };
 
 /** Model instances (one InstancedMesh per material) at the given items; items may carry their own scale. */
 export function ModelInstances({ geometry, material, items }: { geometry: BufferGeometry; material: Material; items: Item[] }) {
@@ -175,7 +180,7 @@ function FitOut({ layout }: { layout: Layout }) {
       <ModelInstances geometry={g.leaves} material={mats.leaves} items={plants} />
       <ModelInstances geometry={g.leavesTop} material={mats.leavesTop} items={plants} />
 
-      <Boxes items={layout.booths} size={BOOTH} y={BOOTH[1] / 2}>
+      <Boxes items={layout.booths} size={BOOTH} y={BOOTH[1] / 2} renderOrder={GLASS_ORDER.booth}>
         <meshStandardMaterial color="#d6e6f5" transparent opacity={0.18} roughness={0.05} metalness={0.2} depthWrite={false} clippingPlanes={CLIP_PLANES} />
       </Boxes>
       <Boxes items={layout.booths} size={[0.08, BOOTH[1], BOOTH[2]]} y={BOOTH[1] / 2} offset={(it) => ({ ...it, x: it.x - Math.sign(it.x) * 0.5 })}>
@@ -363,7 +368,7 @@ export function Interior({
       {exec.map((p, i) => (
         <ModelInstances key={i} geometry={p.geometry} material={p.material} items={execElsewhere} />
       ))}
-      <Boxes items={layout.glass} size={ONE} y={0}>
+      <Boxes items={layout.glass} size={ONE} y={0} renderOrder={GLASS_ORDER.interior}>
         <meshStandardMaterial color="#cfe0f0" transparent opacity={0.16} roughness={0.05} metalness={0.3} depthWrite={false} clippingPlanes={CLIP_PLANES} />
       </Boxes>
       <Boxes items={layout.tables} size={TABLE} y={0.74} exclude={selected}>

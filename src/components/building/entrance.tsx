@@ -121,10 +121,10 @@ function SlidingDoors() {
   const y = LOBBY.floor + h / 2;
   return (
     <group>
-      <mesh ref={left} position={[-DOOR.x / 2, y, LOBBY.glassZ - 0.15]} material={glass}>
+      <mesh ref={left} position={[-DOOR.x / 2, y, LOBBY.glassZ - 0.15]} material={glass} renderOrder={1}>
         <boxGeometry args={[DOOR.x, h, 0.05]} />
       </mesh>
-      <mesh ref={right} position={[DOOR.x / 2, y, LOBBY.glassZ - 0.15]} material={glass}>
+      <mesh ref={right} position={[DOOR.x / 2, y, LOBBY.glassZ - 0.15]} material={glass} renderOrder={1}>
         <boxGeometry args={[DOOR.x, h, 0.05]} />
       </mesh>
       {[

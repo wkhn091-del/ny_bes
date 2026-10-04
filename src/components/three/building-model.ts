@@ -102,6 +102,8 @@ export type BuildingParts = {
   exec: { geometry: BufferGeometry; material: Material }[];
 };
 
+/** The tower's own glass draws after the interior glass layers, in a fixed order. */
+const FACADE_GLASS_ORDER = 3;
 const DESK_MAT = 'GWC_Desk_02';
 const EXEC_MATS = new Set(['Wood', 'Metal', 'Leather']);
 
@@ -169,6 +171,7 @@ export function prepareBuilding(scene: Object3D, cut: Cutaway, clip: Plane[]): B
       restyled.set(src.name, m);
     }
     mesh.material = mat;
+    if (mat.transparent) mesh.renderOrder = FACADE_GLASS_ORDER;
   });
   loose.forEach((m) => m.removeFromParent());
   return { root, desk, exec };

@@ -3,7 +3,7 @@
 import { Environment, Html, Lightformer, OrbitControls, Stars, useGLTF } from '@react-three/drei';
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { AdditiveBlending, CanvasTexture, Color, type Group, type PerspectiveCamera, type PointLight, SRGBColorSpace, Vector3 } from 'three';
+import { AdditiveBlending, CanvasTexture, Color, type Group, type PerspectiveCamera, type PointLight, type Points, SRGBColorSpace, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { BUILDING_URL, CLEAR_HEIGHT, FLOOR_COUNT, PLATE, PROGRAM_COPY, ROOF_Y, floorY, prepareBuilding, programOf } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
@@ -338,6 +338,18 @@ function Building({ selected, layout }: { selected: number | null; layout: Layou
   );
 }
 
+/**
+ * Still stars, always drawn before the tower's glass: twinkling or a changing draw order makes
+ * them flash white through the facade as the camera moves.
+ */
+function SkyStars() {
+  const ref = useRef<Points>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.renderOrder = -20;
+  }, []);
+  return <Stars ref={ref} radius={1400} depth={200} count={1600} factor={7} fade speed={0} />;
+}
+
 function Ready({ onReady }: { onReady: () => void }) {
   useEffect(() => onReady(), [onReady]);
   return null;
@@ -373,7 +385,7 @@ export default function BuildingScene({
       <fog attach="fog" args={['#0b1020', 320, 1200]} />
       <hemisphereLight args={['#5a6c9c', '#07080c', 0.55]} />
       <directionalLight position={[-220, 300, -160]} intensity={0.55} color="#b8c8ff" />
-      <Stars radius={1400} depth={200} count={1600} factor={12} fade speed={0.4} />
+      <SkyStars />
       <mesh position={[-600, 520, -1100]}>
         <sphereGeometry args={[24, 32, 16]} />
         <meshBasicMaterial color="#f4f1e6" toneMapped={false} fog={false} />

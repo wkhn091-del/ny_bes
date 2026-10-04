@@ -454,7 +454,7 @@ function FarSkyline() {
   const tex = useMemo(() => skylineRingTexture(), []);
   useEffect(() => () => tex.dispose(), [tex]);
   return (
-    <mesh position={[0, 95, 0]}>
+    <mesh position={[0, 95, 0]} renderOrder={-10}>
       <cylinderGeometry args={[1150, 1150, 230, 64, 1, true]} />
       <meshBasicMaterial map={tex} transparent side={BackSide} fog={false} toneMapped={false} depthWrite={false} />
     </mesh>
