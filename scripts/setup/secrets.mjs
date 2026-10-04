@@ -49,9 +49,10 @@ const SERVICE_KEYS = [
   'TURNSTILE_SECRET_KEY',
   'UPSTASH_REDIS_REST_URL',
   'UPSTASH_REDIS_REST_TOKEN',
+  'SUPABASE_DB_URL',
 ];
-// Provided by Vercel itself at runtime; kept locally only for Vault / webhook URLs.
-const LOCAL_ONLY = new Set(['VERCEL_AUTOMATION_BYPASS_SECRET']);
+// Never sent to Vercel: the bypass secret is injected by Vercel itself; the DB URL is only for running migrations.
+const LOCAL_ONLY = new Set(['VERCEL_AUTOMATION_BYPASS_SECRET', 'SUPABASE_DB_URL']);
 
 function fill(values) {
   for (const [key, gen] of Object.entries(GENERATORS)) {
@@ -110,6 +111,10 @@ writeFileSync(localPath, merged, { mode: 0o600 });
 for (const key of Object.keys(GENERATORS)) {
   const values = [local.get(key), sets.preview.get(key), sets.production.get(key)];
   if (new Set(values).size !== values.length) throw new Error(`${key} is shared between environments`);
+}
+for (const key of SERVICE_KEYS.filter((k) => !k.startsWith('NEXT_PUBLIC_SANITY'))) {
+  const value = sets.preview.get(key);
+  if (value && value === sets.production.get(key)) throw new Error(`${key} is identical in preview and production`);
 }
 
 const appUrls = {
