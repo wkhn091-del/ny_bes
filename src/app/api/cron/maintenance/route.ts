@@ -1,3 +1,4 @@
+import 'server-only';
 import { timingSafeEqual } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { env, isConfigured } from '@/lib/env.server';
@@ -22,7 +23,7 @@ function authorized(request: NextRequest): boolean {
  * Called every 5 minutes by Supabase pg_cron (see supabase/migrations/0002_cron.sql):
  * 1. expire lapsed payment holds, 2. close their Stripe sessions so they can no longer be paid,
  * 3. send 2-hour reminders, 4. warn customers 30 days before loyalty points expire.
- * (Earning and expiring the points themselves run inside the database — see 0003_customer_portal.sql.)
+ * (Earning and expiring the points themselves run inside the database ג€” see 0003_customer_portal.sql.)
  */
 export async function POST(request: NextRequest) {
   if (!authorized(request)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });

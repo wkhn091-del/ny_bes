@@ -2,6 +2,7 @@ import { Maximize2, Users } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/Badge';
+import { RenderBadge } from '@/components/ui/RenderBadge';
 import { FavoriteButton } from './FavoriteButton';
 import { formatIls } from '@/lib/domain/pricing';
 import { SPACE_TYPE_LABELS, type Branch, type Space } from '@/lib/domain/types';
@@ -42,6 +43,7 @@ export function SpaceCard({ space, branch, remaining, recentBookings, priority, 
               priority={priority}
             />
           )}
+          <RenderBadge image={image} />
           <div className="absolute right-3 top-3 flex gap-1.5">
             <Badge tone="neutral" className="bg-bg/90 backdrop-blur">
               {SPACE_TYPE_LABELS[space.type]}

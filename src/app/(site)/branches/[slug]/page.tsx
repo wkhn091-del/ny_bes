@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { BranchHours } from '@/components/branches/BranchHours';
 import { SpaceCard } from '@/components/spaces/SpaceCard';
 import { Badge } from '@/components/ui/Badge';
+import { RenderBadge } from '@/components/ui/RenderBadge';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { getBranchBySlug, getCatalog } from '@/lib/content/catalog';
 import { slugSchema } from '@/lib/domain/schemas';
@@ -47,6 +48,7 @@ export default async function BranchPage({ params }: PageProps<'/branches/[slug]
       />
       <section className="relative h-[320px] overflow-hidden sm:h-[420px]">
         <Image src={branch.image.url} alt={branch.image.alt} fill priority sizes="100vw" className="object-cover" />
+        <RenderBadge image={branch.image} className="left-4 top-4" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 mx-auto max-w-7xl px-4 pb-8 text-white sm:px-6">
           <p className="text-sm opacity-80">{branch.city.name}</p>
@@ -77,6 +79,7 @@ export default async function BranchPage({ params }: PageProps<'/branches/[slug]
                 {branch.gallery.map((img, i) => (
                   <div key={`${img.url}-${i}`} className="relative aspect-[4/3] overflow-hidden rounded-xl">
                     <Image src={img.url} alt={img.alt} fill sizes="(min-width: 640px) 25vw, 50vw" className="object-cover" />
+                    <RenderBadge image={img} />
                   </div>
                 ))}
               </div>

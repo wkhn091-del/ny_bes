@@ -1,3 +1,4 @@
+import 'server-only';
 import { timingSafeEqual } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
@@ -27,28 +28,28 @@ const querySchema = z.object({
 
 const REFUND_LABELS: Record<BookingView['refundStatus'], string> = {
   none: '',
-  pending: 'בתהליך',
-  succeeded: 'הוחזר',
-  failed: 'נכשל',
+  pending: '׳‘׳×׳”׳׳™׳',
+  succeeded: '׳”׳•׳—׳–׳¨',
+  failed: '׳ ׳›׳©׳',
 };
 
 const COLUMNS: CsvColumn<BookingView>[] = [
-  { header: 'קוד הזמנה', value: (b) => b.publicCode, ltr: true },
-  { header: 'תאריך', value: (b) => b.localDate, ltr: true },
-  { header: 'שעות', value: (b) => (b.isDayPass ? `יום שלם ${b.timeLabel}` : b.timeLabel), ltr: true },
-  { header: 'סניף', value: (b) => b.branchName },
-  { header: 'חלל', value: (b) => b.spaceName },
-  { header: 'סוג', value: (b) => b.spaceTypeLabel },
-  { header: 'סטטוס', value: (b) => BOOKING_STATUS_LABELS[b.status] ?? b.status },
-  { header: 'מושבים', value: (b) => b.seats },
-  { header: 'חברה', value: (b) => b.companyName },
-  { header: 'ח.פ / ע.מ', value: (b) => b.companyTaxId, ltr: true },
-  { header: 'לפני הנחה (₪)', value: (b) => b.baseAmount / 100 },
-  { header: 'הנחה (₪)', value: (b) => b.discountAmount / 100 },
-  { header: 'תוספות (₪)', value: (b) => b.addonsAmount / 100 },
-  { header: 'סה״כ כולל מע״מ (₪)', value: (b) => b.totalAmount / 100 },
-  { header: 'מתוכו מע״מ (₪)', value: (b) => b.vatAmount / 100 },
-  { header: 'החזר', value: (b) => REFUND_LABELS[b.refundStatus] },
+  { header: '׳§׳•׳“ ׳”׳–׳׳ ׳”', value: (b) => b.publicCode, ltr: true },
+  { header: '׳×׳׳¨׳™׳', value: (b) => b.localDate, ltr: true },
+  { header: '׳©׳¢׳•׳×', value: (b) => (b.isDayPass ? `׳™׳•׳ ׳©׳׳ ${b.timeLabel}` : b.timeLabel), ltr: true },
+  { header: '׳¡׳ ׳™׳£', value: (b) => b.branchName },
+  { header: '׳—׳׳', value: (b) => b.spaceName },
+  { header: '׳¡׳•׳’', value: (b) => b.spaceTypeLabel },
+  { header: '׳¡׳˜׳˜׳•׳¡', value: (b) => BOOKING_STATUS_LABELS[b.status] ?? b.status },
+  { header: '׳׳•׳©׳‘׳™׳', value: (b) => b.seats },
+  { header: '׳—׳‘׳¨׳”', value: (b) => b.companyName },
+  { header: '׳—.׳₪ / ׳¢.׳', value: (b) => b.companyTaxId, ltr: true },
+  { header: '׳׳₪׳ ׳™ ׳”׳ ׳—׳” (ג‚×)', value: (b) => b.baseAmount / 100 },
+  { header: '׳”׳ ׳—׳” (ג‚×)', value: (b) => b.discountAmount / 100 },
+  { header: '׳×׳•׳¡׳₪׳•׳× (ג‚×)', value: (b) => b.addonsAmount / 100 },
+  { header: '׳¡׳”׳´׳› ׳›׳•׳׳ ׳׳¢׳´׳ (ג‚×)', value: (b) => b.totalAmount / 100 },
+  { header: '׳׳×׳•׳›׳• ׳׳¢׳´׳ (ג‚×)', value: (b) => b.vatAmount / 100 },
+  { header: '׳”׳—׳–׳¨', value: (b) => REFUND_LABELS[b.refundStatus] },
 ];
 
 function bearerMatches(request: NextRequest): boolean {

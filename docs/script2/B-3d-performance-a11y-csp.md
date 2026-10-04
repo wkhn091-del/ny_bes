@@ -53,7 +53,7 @@
 default-src 'self'
 script-src 'self' 'nonce-{per-request}' 'strict-dynamic' 'wasm-unsafe-eval'
 style-src 'self' 'unsafe-inline'
-img-src 'self' data: blob: https://images.unsplash.com https://cdn.sanity.io
+img-src 'self' data: blob: https://cdn.sanity.io
 font-src 'self'
 connect-src 'self' {SUPABASE_URL} {SENTRY_INGEST} https://challenges.cloudflare.com https://vitals.vercel-insights.com
 frame-src https://challenges.cloudflare.com

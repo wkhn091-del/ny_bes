@@ -1,3 +1,4 @@
+import 'server-only';
 import { NextResponse, type NextRequest } from 'next/server';
 import { verifyAuthWebhook } from '@/lib/security/auth-webhook';
 import { env, isConfigured, requireEnv } from '@/lib/env.server';

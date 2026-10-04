@@ -29,7 +29,6 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   images: {
     remotePatterns: [
-      { protocol: 'https', hostname: 'images.unsplash.com', pathname: '/**' },
       { protocol: 'https', hostname: 'cdn.sanity.io', pathname: '/images/**' },
       { protocol: 'https', hostname: 'lh3.googleusercontent.com', pathname: '/**' },
     ],

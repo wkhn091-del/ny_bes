@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight, Images, X } from 'lucide-react';
 import Image from 'next/image';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { RenderBadge } from '@/components/ui/RenderBadge';
 import type { ImageRef } from '@/lib/domain/types';
 
 export function Gallery({ images, title }: { images: ImageRef[]; title: string }) {
@@ -39,6 +40,7 @@ export function Gallery({ images, title }: { images: ImageRef[]; title: string }
       <div className="relative grid h-[280px] gap-2 overflow-hidden rounded-2xl sm:h-[420px] sm:grid-cols-4 sm:grid-rows-2">
         <button type="button" onClick={() => show(0)} className="relative sm:col-span-2 sm:row-span-2" aria-label={`הגדלת תמונה: ${main.alt}`}>
           <Image src={main.url} alt={main.alt} fill priority sizes="(min-width: 640px) 50vw, 100vw" className="object-cover transition-opacity hover:opacity-95" />
+          <RenderBadge image={main} className="bottom-3 right-3" />
         </button>
         {rest.slice(0, 4).map((img, i) => (
           <button
@@ -49,6 +51,7 @@ export function Gallery({ images, title }: { images: ImageRef[]; title: string }
             aria-label={`הגדלת תמונה: ${img.alt}`}
           >
             <Image src={img.url} alt={img.alt} fill sizes="25vw" className="object-cover transition-opacity hover:opacity-90" />
+            <RenderBadge image={img} className="bottom-2 right-2" />
           </button>
         ))}
         {count > 1 && (
@@ -74,6 +77,7 @@ export function Gallery({ images, title }: { images: ImageRef[]; title: string }
           <div className="relative flex h-full w-full items-center justify-center p-4 sm:p-12">
             <div className="relative h-full w-full max-w-5xl">
               <Image src={images[open].url} alt={images[open].alt} fill sizes="100vw" className="object-contain" />
+              <RenderBadge image={images[open]} className="right-2 top-2" />
             </div>
             <p className="absolute bottom-4 inset-x-0 text-center text-sm opacity-80">
               {images[open].alt} · {open + 1}/{count}

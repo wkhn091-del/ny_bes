@@ -7,6 +7,7 @@ import { StickyCta } from '@/components/home/StickyCta';
 import { WhyUs } from '@/components/home/WhyUs';
 import { SearchBar } from '@/components/search/SearchBar';
 import { ButtonLink } from '@/components/ui/Button';
+import { RenderBadge } from '@/components/ui/RenderBadge';
 import { getCatalog } from '@/lib/content/catalog';
 import { calculatePrice, formatIls } from '@/lib/domain/pricing';
 import { BOOKING_WINDOW_DAYS, maxBookableDate, nextOpenDate, nowInIsrael } from '@/lib/domain/time';
@@ -41,7 +42,7 @@ export default async function HomePage() {
       type,
       count: ofType.length,
       fromPrice: ofType.length ? Math.min(...ofType.map((s) => s.hourlyPrice)) : null,
-      image: ofType[0]?.images[0] ?? null,
+      image: (ofType.find((s) => s.images[0] && s.images[0].url !== flagship?.image.url) ?? ofType[0])?.images[0] ?? null,
       dayPassFrom: type === 'privateOffice' ? Math.min(...ofType.map((s) => s.dayPassPrice ?? Infinity)) : null,
     };
   }).filter((t) => t.count > 0);
@@ -212,6 +213,7 @@ export default async function HomePage() {
               {t.image && (
                 <div className="relative aspect-[16/10] overflow-hidden">
                   <Image src={t.image.url} alt={t.image.alt} fill sizes="(min-width: 768px) 33vw, 100vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+                  <RenderBadge image={t.image} />
                 </div>
               )}
               <div className="p-5">
@@ -280,6 +282,7 @@ export default async function HomePage() {
                 <div className="relative aspect-[16/10]">
                   <Image src={branch.image.url} alt={branch.image.alt} fill sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                  <RenderBadge image={branch.image} className="left-3 top-3" />
                 </div>
                 <div className="absolute inset-x-0 bottom-0 p-5 text-white">
                   <p className="text-xs opacity-80">{branch.city.name}</p>
@@ -302,6 +305,7 @@ export default async function HomePage() {
           <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-20 sm:px-6 lg:grid-cols-2">
             <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-border">
               <Image src={flagship.image.url} alt={flagship.image.alt} fill sizes="(min-width: 1024px) 50vw, 100vw" className="object-cover" />
+              <RenderBadge image={flagship.image} />
             </div>
             <div>
               <p className="text-sm font-semibold text-accent-text">על SpaceHub</p>

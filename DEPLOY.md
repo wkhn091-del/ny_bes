@@ -5,9 +5,29 @@ Use separate projects/keys for Preview and Production wherever the provider allo
 
 ---
 
-## 1. Supabase (Frankfurt, `eu-central-1`)
+## 0. Generate per-environment secrets
 
-1. Create a project in **eu-central-1**. Keep the service-role key out of anything `NEXT_PUBLIC_*`.
+```bash
+node scripts/setup/secrets.mjs          # writes .env.local, .secrets/{preview,production}.env, .secrets/vault-*.sql
+node scripts/setup/secrets.mjs --push   # pushes non-empty keys from .secrets/*.env to Vercel (REST API)
+```
+
+- Every generated secret (`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`, `CSV_EXPORT_TOKEN`, `CRON_SECRET`,
+  `AUTH_WEBHOOK_SECRET`, `SANITY_WEBHOOK_SECRET`) is different per environment; the script refuses to continue if
+  two environments share a value, and refuses `sk_live_`/`rk_live_` keys in Preview.
+- Fill provider keys into `.secrets/preview.env` / `.secrets/production.env` (gitignored), never into chat or git.
+- `NEXT_PUBLIC_*` keys are pushed as plain, everything else as sensitive.
+
+## 1. Supabase
+
+**Region:** pick the region closest to the Vercel function region (Vercel default `iad1`; for Israeli users prefer
+Supabase `eu-central-1` + Vercel `fra1`). The current Staging project is in `ap-northeast-1` (Tokyo), which adds
+roughly a second to every server call from `iad1`; create the Production project in `eu-central-1`. A project's
+region cannot be changed later.
+
+1. Create a project. Keep the service-role key out of anything `NEXT_PUBLIC_*`.
+   New API keys: `sb_publishable_…` → `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `sb_secret_…` → `SUPABASE_SERVICE_ROLE_KEY`.
+   Secret keys are rejected (401) when called with a browser User-Agent; server calls are unaffected.
 2. SQL editor → run, in order:
    - `supabase/migrations/0001_init.sql` — tables, exclusion constraint, RLS, RPCs (all RPCs are `service_role` only).
    - `supabase/migrations/0002_cron.sql` — enables `pg_cron` + `pg_net` and schedules jobs.
@@ -19,11 +39,17 @@ Use separate projects/keys for Preview and Production wherever the provider allo
      `/api/auth/webhook` (HMAC-SHA256, 5-minute timestamp window, event-id idempotency ledger).
    - `supabase/migrations/0005_cro.sql` — `space_co_bookings` (service_role only): "customers who booked this also
      booked" counts for recommendations, returned only when at least 3 distinct customers share the pair.
-3. Vault secrets used by the cron job and the auth webhook (Project Settings → Vault, or SQL):
+   - `supabase/migrations/0006_vercel_bypass.sql` — outbound calls from the database (cron, auth webhook) add the
+     `x-vercel-protection-bypass` header when the Vault secret `spacehub_vercel_bypass` exists, so they reach a
+     Preview deployment behind Deployment Protection. Leave the secret unset in Production.
+3. Vault secrets used by the cron job and the auth webhook. Run the generated `.secrets/vault-<env>.sql` in the SQL
+   editor (it deletes and recreates the secrets, so it is safe to re-run), or by hand:
    ```sql
    select vault.create_secret('https://<your-production-domain>', 'spacehub_app_url');
    select vault.create_secret('<same value as CRON_SECRET>', 'spacehub_cron_secret');
    select vault.create_secret('<same value as AUTH_WEBHOOK_SECRET>', 'spacehub_auth_webhook_secret');
+   -- Preview only, value = Vercel → Settings → Deployment Protection → Protection Bypass for Automation
+   select vault.create_secret('<bypass secret>', 'spacehub_vercel_bypass');
    ```
    Rotating `AUTH_WEBHOOK_SECRET`: update Vault and the Vercel variable together, then redeploy. Deliveries signed
    with the old value during the gap are rejected (401) and the card is re-synced on the next sign-in.
@@ -86,7 +112,7 @@ Use separate projects/keys for Preview and Production wherever the provider allo
 | Resend | API key; keep `onboarding@resend.dev` until a domain is verified | `RESEND_API_KEY`, `EMAIL_FROM` |
 | Telegram | Bot via @BotFather; add it to one group per branch | `TELEGRAM_BOT_TOKEN` |
 | Turnstile | Widget (Managed), hostnames = prod + preview domains + localhost | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` |
-| Upstash | Redis database, region **eu-central-1** | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` |
+| Upstash | Redis database, region **eu-central-1**. Keys are prefixed `spacehub:rl:`, so a shared database is safe | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` |
 | Sentry | Next.js project; DSN; optional auth token for source maps | `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_*` |
 
 Telegram group per branch (chat ids are negative numbers — get them from `getUpdates` after messaging the group):
@@ -104,8 +130,15 @@ on conflict (branch_id) do update set chat_id = excluded.chat_id, updated_at = n
    - *Preview*: separate Stripe webhook secret, Preview `NEXT_PUBLIC_SITE_URL`, ideally a separate Supabase project.
    - *Development*: pull with `vercel env pull .env.local`.
    On Preview/Production the server refuses to start if a required variable is missing (`src/lib/env.server.ts`).
-3. Enable **Vercel Analytics** (cookieless — no consent banner required).
-4. Deploy, then update Supabase Vault `spacehub_app_url` if the domain changed.
+   Sanity and Telegram keys are required only in Production; Preview falls back to the bundled demo catalog.
+3. **Staging**: push to the `staging` branch; its Preview URL is
+   `https://<project>-git-staging-<team>.vercel.app`. Settings → Deployment Protection → *Vercel Authentication:
+   All except custom domains*, and create a *Protection Bypass for Automation* secret (Stripe/Supabase callers send it
+   as `x-vercel-protection-bypass`; local tooling reads it from `.secrets/preview.env`).
+4. **Production deploys are off** until Production has its own provider keys: `vercel.json` sets
+   `git.deploymentEnabled.main = false` (and skips `dependabot/**`). Remove the `main` entry to turn them on.
+5. Enable **Vercel Analytics** (cookieless — no consent banner required).
+6. Deploy, then update Supabase Vault `spacehub_app_url` if the domain changed.
 
 ## 6. Seed demo content
 

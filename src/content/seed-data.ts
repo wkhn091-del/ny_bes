@@ -9,6 +9,7 @@ import type {
   SiteSettings,
   Space,
 } from '@/lib/domain/types';
+import { RENDER_ALT_MARKER, RENDER_PREFIX } from '@/lib/domain/images';
 
 /**
  * Demo content. Used (a) by `npm run seed` to populate Sanity + the Supabase mirrors and
@@ -16,21 +17,38 @@ import type {
  * Every business detail here is DEMO data and must be replaced before going live.
  */
 
-const unsplash = (id: string, w = 1600) =>
-  `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=80`;
+const render = (slug: string, alt: string): ImageRef => ({ url: `${RENDER_PREFIX}${slug}.webp`, alt: `${alt} ${RENDER_ALT_MARKER}` });
 
+/** One illustrative render per space, keyed by space slug. Never reuse an image for a different space. */
 export const IMAGES = {
-  hero: { url: unsplash('1497366216548-37526070297c', 2000), alt: 'חלל עבודה מואר עם קירות זכוכית ועמדות עבודה' },
-  flagship: { url: '/images/rothschild-flagship.png', alt: 'סניף רוטשילד — קומת עבודה פתוחה עם תקרת עץ ומשרדי זכוכית' },
-  hotDesk1: { url: unsplash('1524758631624-e2822e304c36'), alt: 'עמדות עבודה משותפות באזור פתוח' },
-  hotDesk2: { url: unsplash('1527192491265-7e15c55b1ed2'), alt: 'שולחנות עבודה משותפים עם מחשבים' },
-  office1: { url: unsplash('1497366811353-6870744d04b2'), alt: 'משרד פרטי שקט עם שולחן עבודה' },
-  office2: { url: unsplash('1604328698692-f76ea9498e76'), alt: 'משרד פרטי סגור עם תאורה טבעית' },
-  meeting1: { url: unsplash('1572025442646-866d16c84a54'), alt: 'חדר ישיבות עם קירות זכוכית ומסך' },
-  meeting2: { url: unsplash('1517502884422-41eaead166d4'), alt: 'חדר ישיבות מאובזר עם שולחן ארוך' },
-  lounge1: { url: unsplash('1600508774634-4e11d34730e2'), alt: 'אזור לאונג׳ לנטוורקינג ומנוחה' },
-  lounge2: { url: unsplash('1519389950473-47ba0277781c'), alt: 'אנשים עובדים יחד בלאונג׳ עם מחשבים ניידים' },
+  'tlv-rothschild-hot-desk': render('tlv-rothschild-hot-desk', 'רוטשילד — קומת עבודה פתוחה עם תקרת עץ ומשרדי זכוכית'),
+  'tlv-rothschild-office-a': render('tlv-rothschild-office-a', 'רוטשילד — משרד זכוכית ל-3 עם נוף לעצי השדרה'),
+  'tlv-rothschild-office-b': render('tlv-rothschild-office-b', 'רוטשילד — משרד פינתי עם חלונות לשדרה'),
+  'tlv-rothschild-meeting-small': render('tlv-rothschild-meeting-small', 'רוטשילד — חדר ישיבות זכוכית ל-4 עם מסך ומצלמת וידאו'),
+  'tlv-rothschild-meeting-large': render('tlv-rothschild-meeting-large', 'רוטשילד — חדר ישיבות ל-10 עם מקרן, מסך ולוח'),
+  'tlv-sarona-hot-desk': render('tlv-sarona-hot-desk', 'שרונה — אזור עבודה פתוח בקומה גבוהה עם נוף לקו הרקיע'),
+  'tlv-sarona-office-a': render('tlv-sarona-office-a', 'שרונה — משרד פרטי ל-3 עם שולחן עמידה ונוף למגדלים'),
+  'tlv-sarona-meeting-small': render('tlv-sarona-meeting-small', 'שרונה — חדר ישיבות זכוכית ל-4 עם קיר צמחייה'),
+  'tlv-sarona-meeting-large': render('tlv-sarona-meeting-large', 'שרונה — חדר ישיבות ל-10 עם נוף לעיר'),
+  'jerusalem-center-hot-desk': render('jerusalem-center-hot-desk', 'ירושלים — אזור עבודה פתוח בבניין אבן עם חלונות קשתיים'),
+  'jerusalem-center-office-a': render('jerusalem-center-office-a', 'ירושלים — משרד פרטי ל-3 עם קיר אבן ירושלמית'),
+  'jerusalem-center-meeting-small': render('jerusalem-center-meeting-small', 'ירושלים — חדר ישיבות ל-4 תחת תקרת אבן מקומרת'),
+  'haifa-port-hot-desk': render('haifa-port-hot-desk', 'חיפה — אזור עבודה פתוח במבנה תעשייתי עם נוף לנמל'),
+  'haifa-port-office-a': render('haifa-port-office-a', 'חיפה — משרד פרטי ל-3 עם חלון גדול לנמל ולים'),
+  'haifa-port-meeting-large': render('haifa-port-meeting-large', 'חיפה — חדר ישיבות ל-10 עם נוף לנמל'),
+  'beer-sheva-gav-yam-hot-desk': render('beer-sheva-gav-yam-hot-desk', 'באר שבע — אזור עבודה פתוח בפארק ההייטק'),
+  'beer-sheva-gav-yam-office-a': render('beer-sheva-gav-yam-office-a', 'באר שבע — משרד פרטי ל-3 עם שולחן עמידה'),
+  'beer-sheva-gav-yam-meeting-small': render('beer-sheva-gav-yam-meeting-small', 'באר שבע — חדר ישיבות ל-4 עם נוף למדבר'),
 } satisfies Record<string, ImageRef>;
+
+type SpaceImageKey = keyof typeof IMAGES;
+const imageOf = (slug: string): ImageRef => {
+  const image = IMAGES[slug as SpaceImageKey];
+  if (!image) throw new Error(`seed: missing image for ${slug}`);
+  return image;
+};
+const branchImages = (branchSlug: string): ImageRef[] =>
+  (Object.keys(IMAGES) as SpaceImageKey[]).filter((k) => k.startsWith(`${branchSlug}-`)).map((k) => IMAGES[k]);
 
 const STANDARD_HOURS: DayHours[] = [
   { day: 0, closed: false, open: '08:00', close: '20:00' },
@@ -66,8 +84,8 @@ export const SEED_BRANCHES: Branch[] = [
     phone: '03-0000001',
     description:
       'סניף הדגל שלנו בלב השדרה: קומה פתוחה עם תקרת עץ, משרדי זכוכית שקטים וחדרי ישיבות לצוותים. חמש דקות הליכה מתחנת הרכבת הקלה.',
-    image: IMAGES.flagship,
-    gallery: [IMAGES.flagship, IMAGES.lounge1, IMAGES.meeting1, IMAGES.hotDesk1],
+    image: imageOf('tlv-rothschild-hot-desk'),
+    gallery: branchImages('tlv-rothschild'),
     hours: STANDARD_HOURS,
     isFlagship: true,
   },
@@ -80,8 +98,8 @@ export const SEED_BRANCHES: Branch[] = [
     wazeUrl: 'https://waze.com/ul?q=%D7%A7%D7%A4%D7%9C%D7%9F%2020%20%D7%AA%D7%9C%20%D7%90%D7%91%D7%99%D7%91&navigate=yes',
     phone: '03-0000002',
     description: 'ליד מתחם שרונה ומגדלי ההייטק. אידיאלי לפגישות לקוח ולצוותים שצריכים חדר מאובזר לכמה שעות.',
-    image: IMAGES.lounge2,
-    gallery: [IMAGES.lounge2, IMAGES.meeting2, IMAGES.office1],
+    image: imageOf('tlv-sarona-hot-desk'),
+    gallery: branchImages('tlv-sarona'),
     hours: STANDARD_HOURS,
     isFlagship: false,
   },
@@ -94,8 +112,8 @@ export const SEED_BRANCHES: Branch[] = [
     wazeUrl: 'https://waze.com/ul?q=%D7%99%D7%A4%D7%95%2097%20%D7%99%D7%A8%D7%95%D7%A9%D7%9C%D7%99%D7%9D&navigate=yes',
     phone: '02-0000003',
     description: 'קרוב לתחנת הרכבת הקלה ולשוק. חלל שקט לעבודה מרוכזת עם חדרי ישיבות לצוותים קטנים.',
-    image: IMAGES.hotDesk2,
-    gallery: [IMAGES.hotDesk2, IMAGES.office2, IMAGES.lounge1],
+    image: imageOf('jerusalem-center-hot-desk'),
+    gallery: branchImages('jerusalem-center'),
     hours: STANDARD_HOURS,
     isFlagship: false,
   },
@@ -108,8 +126,8 @@ export const SEED_BRANCHES: Branch[] = [
     wazeUrl: 'https://waze.com/ul?q=%D7%93%D7%A8%D7%9A%20%D7%94%D7%A2%D7%A6%D7%9E%D7%90%D7%95%D7%AA%2040%20%D7%97%D7%99%D7%A4%D7%94&navigate=yes',
     phone: '04-0000004',
     description: 'ליד תחנת חיפה מרכז השמונה. חלל מואר עם נוף לנמל, נפתח מוקדם בבוקר.',
-    image: IMAGES.office1,
-    gallery: [IMAGES.office1, IMAGES.meeting1, IMAGES.lounge2],
+    image: imageOf('haifa-port-hot-desk'),
+    gallery: branchImages('haifa-port'),
     hours: EARLY_HOURS,
     isFlagship: false,
   },
@@ -122,8 +140,8 @@ export const SEED_BRANCHES: Branch[] = [
     wazeUrl: 'https://waze.com/ul?q=%D7%94%D7%A0%D7%97%D7%95%D7%A9%D7%AA%202%20%D7%91%D7%90%D7%A8%20%D7%A9%D7%91%D7%A2&navigate=yes',
     phone: '08-0000005',
     description: 'ליד פארק ההייטק ותחנת באר שבע צפון. חניה נוחה ועמדות עבודה במחיר הוגן.',
-    image: IMAGES.hotDesk1,
-    gallery: [IMAGES.hotDesk1, IMAGES.meeting2, IMAGES.lounge1],
+    image: imageOf('beer-sheva-gav-yam-hot-desk'),
+    gallery: branchImages('beer-sheva-gav-yam'),
     hours: EARLY_HOURS,
     isFlagship: false,
   },
@@ -182,7 +200,6 @@ interface SpaceTemplate {
   hourlyPrice: number;
   dayPassPrice: number | null;
   poolSize: number | null;
-  images: ImageRef[];
   amenityIds: string[];
 }
 
@@ -197,7 +214,6 @@ const HOT_DESK = (pool: number): SpaceTemplate => ({
   hourlyPrice: 2500,
   dayPassPrice: null,
   poolSize: pool,
-  images: [IMAGES.hotDesk1, IMAGES.hotDesk2, IMAGES.lounge1, IMAGES.lounge2],
   amenityIds: A('natural-light', 'locker', 'phone-booth'),
 });
 
@@ -212,7 +228,6 @@ const OFFICE = (suffix: string, name: string, size: number): SpaceTemplate => ({
   hourlyPrice: 9000,
   dayPassPrice: 52000,
   poolSize: null,
-  images: [IMAGES.office1, IMAGES.office2, IMAGES.lounge2],
   amenityIds: A('natural-light', 'standing-desk', 'whiteboard', 'screen'),
 });
 
@@ -226,7 +241,6 @@ const MEETING_SMALL: SpaceTemplate = {
   hourlyPrice: 12000,
   dayPassPrice: null,
   poolSize: null,
-  images: [IMAGES.meeting1, IMAGES.meeting2, IMAGES.lounge1],
   amenityIds: A('screen', 'whiteboard', 'video-conference'),
 };
 
@@ -240,7 +254,6 @@ const MEETING_LARGE: SpaceTemplate = {
   hourlyPrice: 24000,
   dayPassPrice: null,
   poolSize: null,
-  images: [IMAGES.meeting2, IMAGES.meeting1, IMAGES.lounge2],
   amenityIds: A('projector', 'screen', 'whiteboard', 'video-conference', 'natural-light'),
 };
 
@@ -266,7 +279,7 @@ export const SEED_SPACES: Space[] = SEED_BRANCHES.flatMap((branch) =>
     type: t.type,
     branchId: branch.id,
     description: t.description,
-    images: branch.isFlagship && t.type === 'hotDesk' ? [IMAGES.flagship, ...t.images] : t.images,
+    images: [imageOf(`${branch.slug}-${t.key}`)],
     videoUrl: null,
     capacity: t.capacity,
     sizeSqm: t.sizeSqm,
@@ -302,5 +315,5 @@ export const SEED_SEO: SeoSettings = {
   metaTitle: 'SpaceHub | חללי עבודה וחדרי ישיבות לפי שעה',
   metaDescription:
     'הזמינו עמדה חמה, משרד פרטי או חדר ישיבות בתל אביב, ירושלים, חיפה ובאר שבע. זמינות בזמן אמת, מחיר סופי כולל מע"מ וביטול חינם עד 24 שעות לפני.',
-  shareImage: IMAGES.hero,
+  shareImage: IMAGES['tlv-rothschild-hot-desk'],
 };
