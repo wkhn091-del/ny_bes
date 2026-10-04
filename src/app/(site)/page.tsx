@@ -111,13 +111,7 @@ export default async function HomePage() {
         <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-4 pb-10 pt-10 sm:px-6 sm:pb-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:pb-24 lg:pt-20">
           <div>
             <h1 className="text-[2.5rem] font-extrabold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
-              החדר שלך כבר מחכה{' '}
-              <span className="relative inline-block whitespace-nowrap">
-                במפה
-                <svg className="draw-underline absolute -bottom-2 left-0 h-3 w-full text-accent" viewBox="0 0 200 12" preserveAspectRatio="none" aria-hidden="true">
-                  <path d="M3 9C40 3 120 1 197 6" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" pathLength="1" />
-                </svg>
-              </span>
+              החדר שלך כבר מחכה במפה
             </h1>
             <p className="mt-6 max-w-xl text-lg leading-8 text-muted">
               חדרי ישיבות, משרדים פרטיים ועמדות עבודה לפי שעה ב-{branches.length} סניפים ב{cityList}. רואים מה פנוי ברגע
@@ -196,7 +190,12 @@ export default async function HomePage() {
             <h2 id="types-title" className="text-3xl font-bold tracking-tight">
               מה צריך היום?
             </h2>
-            <p className="mt-2 text-muted">שלושה סוגי חללים, מחיר שקוף לכל אחד.</p>
+            <p className="mt-2 text-muted">
+              שלושה סוגי חללים, מחיר שקוף לכל אחד.{' '}
+              <Link href="/office" className="font-semibold text-accent-text hover:underline">
+                לראות עמדה מכל זווית בתלת־ממד
+              </Link>
+            </p>
           </div>
           <Link href="/spaces" className="hidden items-center gap-1 text-sm font-semibold text-accent-text hover:underline sm:flex">
             לכל החללים <ArrowLeft className="h-4 w-4" aria-hidden="true" />

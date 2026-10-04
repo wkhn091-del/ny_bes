@@ -28,7 +28,6 @@
   --dur-base: 420ms;
   --dur-reveal: 900ms;
   --stagger: 60ms;
-  --delay-draw: 300ms;
   --delay-check: 520ms;
   --delay-burst: 600ms;
   --delay-rise: 700ms;
@@ -147,15 +146,6 @@ body {
       animation-timeline: view();
       animation-range: entry 0% entry 55%;
     }
-  }
-}
-
-/* Hand-drawn underline under the hero keyword (A-recipe: stroke draw). Static line without motion. */
-@media (prefers-reduced-motion: no-preference) {
-  .draw-underline path {
-    stroke-dasharray: 1;
-    stroke-dashoffset: 1;
-    animation: draw-stroke var(--dur-reveal) var(--ease-out) var(--delay-draw) forwards;
   }
 }
 

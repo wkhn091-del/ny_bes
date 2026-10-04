@@ -4,110 +4,22 @@ import { ContactShadows, Environment, OrbitControls, Sparkles, useGLTF, useTextu
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
 import {
-  CanvasTexture,
-  Color,
   RepeatWrapping,
   SRGBColorSpace,
   type DirectionalLight,
   type Group,
-  type Material,
-  type Mesh,
-  type MeshStandardMaterial,
   type PointLight,
 } from 'three';
+import { DESK_URL, DRACO_PATH, drawDeskScreen, prepareDesk } from '@/components/three/desk-model';
 
-const DRACO_DECODER_PATH = '/draco/';
-export const DESK_URL = '/models/spacehub-desk.glb';
 const HDRI_URL = '/hdri/small-empty-room.hdr';
 const CONCRETE = ['/textures/concrete-diff.webp', '/textures/concrete-rough.webp'];
 const TARGET: [number, number, number] = [0, 0.78, 0];
 
-/** The source model shipped a third-party OS wallpaper on the monitor; we draw our own screen instead. */
-function drawScreen(): CanvasTexture {
-  const w = 960;
-  const h = 540;
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-  const font = getComputedStyle(document.body).fontFamily || 'sans-serif';
-
-  const bg = ctx.createLinearGradient(0, 0, w, h);
-  bg.addColorStop(0, '#120a24');
-  bg.addColorStop(1, '#2a1260');
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, w, h);
-
-  ctx.direction = 'rtl';
-  ctx.textAlign = 'right';
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `800 54px ${font}`;
-  ctx.fillText('SpaceHub', w - 56, 96);
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.font = `500 30px ${font}`;
-  ctx.fillText('ההזמנה שלך מאושרת', w - 56, 150);
-
-  const cards = [
-    { label: 'עמדה חמה', time: '09:00–13:00', free: true },
-    { label: 'חדר ישיבות קטן', time: '14:00–15:30', free: true },
-    { label: 'משרד פרטי', time: 'יום שלם', free: false },
-  ];
-  cards.forEach((c, i) => {
-    const y = 200 + i * 98;
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    ctx.beginPath();
-    ctx.roundRect(56, y, w - 112, 78, 18);
-    ctx.fill();
-    ctx.fillStyle = c.free ? '#a78bfa' : 'rgba(255,255,255,0.25)';
-    ctx.beginPath();
-    ctx.arc(w - 96, y + 39, 12, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `700 30px ${font}`;
-    ctx.fillText(c.label, w - 128, y + 50);
-    ctx.textAlign = 'left';
-    ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.font = `500 26px ${font}`;
-    ctx.fillText(c.time, 92, y + 49);
-    ctx.textAlign = 'right';
-  });
-
-  const tex = new CanvasTexture(canvas);
-  tex.flipY = false;
-  tex.colorSpace = SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
-
 function Desk() {
-  const { scene } = useGLTF(DESK_URL, DRACO_DECODER_PATH);
-  const screen = useMemo(() => drawScreen(), []);
-  const model = useMemo(() => {
-    const root = scene.clone(true);
-    root.traverse((obj) => {
-      const mesh = obj as Mesh;
-      if (!mesh.isMesh) return;
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      const mat = mesh.material as Material;
-      if (mat.name.startsWith('cofee_cup_mat')) {
-        const m = (mat as MeshStandardMaterial).clone();
-        m.map = null;
-        m.color = new Color('#e4d6bd');
-        mesh.material = m;
-      } else if (mat.name === 'Monitor_screen_mat') {
-        const m = (mat as MeshStandardMaterial).clone();
-        m.map = screen;
-        m.emissiveMap = screen;
-        m.emissive = new Color('#ffffff');
-        m.emissiveIntensity = 1.1;
-        m.roughness = 0.25;
-        mesh.material = m;
-      }
-    });
-    return root;
-  }, [scene, screen]);
-
+  const { scene } = useGLTF(DESK_URL, DRACO_PATH);
+  const screen = useMemo(() => drawDeskScreen(), []);
+  const model = useMemo(() => prepareDesk(scene, screen), [scene, screen]);
   useEffect(() => () => screen.dispose(), [screen]);
   // The model's working side faces -Z; turn it so the visitor looks over the chair at the screen.
   return <primitive object={model} rotation-y={Math.PI} />;
@@ -237,4 +149,4 @@ export default function DeskScene({ active, onReady }: { active: boolean; onRead
   );
 }
 
-useGLTF.preload(DESK_URL, DRACO_DECODER_PATH);
+useGLTF.preload(DESK_URL, DRACO_PATH);

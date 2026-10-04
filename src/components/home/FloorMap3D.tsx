@@ -34,6 +34,7 @@ import {
   type MeshStandardMaterial,
   type OrthographicCamera,
 } from 'three';
+import { DESK_LITE_URL, drawDeskScreen, prepareDesk } from '@/components/three/desk-model';
 import { formatIls } from '@/lib/domain/pricing';
 import { formatMinutes, nowInIsrael } from '@/lib/domain/time';
 import type { LiveFloor, LiveSpace } from './floor-types';
@@ -623,11 +624,36 @@ function GlassRoom({ w, d, palette, available, hovered }: { w: number; d: number
   );
 }
 
+/** Real desk model scaled to map units (desk top ≈ 0.43, like the other furniture). Screen lights up when the office is taken. */
+const OFFICE_DESK_SCALE = 0.58;
+
+function OfficeDesk({ occupied, seed }: { occupied: boolean; seed: string }) {
+  const { scene } = useGLTF(DESK_LITE_URL, DRACO_DECODER_PATH);
+  const screen = useMemo(() => drawDeskScreen(), []);
+  const model = useMemo(() => prepareDesk(scene, screen, occupied), [scene, screen, occupied]);
+  useEffect(() => () => screen.dispose(), [screen]);
+  return (
+    <group position={[0, 0, -0.32]} scale={OFFICE_DESK_SCALE} rotation={[0, Math.PI, 0]}>
+      <primitive object={model} />
+      {occupied && (
+        <KitOnly>
+          {(k) => (
+            <group position={[-0.19, 0, -0.37]} scale={1 / OFFICE_DESK_SCALE}>
+              <k.PersonBody color={pick(SHIRTS, seed)} />
+              <k.PersonHead color={pick(SKIN, seed + 'h')} />
+            </group>
+          )}
+        </KitOnly>
+      )}
+    </group>
+  );
+}
+
 function RoomInterior({ tile, palette }: { tile: Tile; palette: Palette }) {
   const occupied = !tile.available;
   const id = tile.space.id;
   if (tile.space.type === 'privateOffice') {
-    return (
+    const simpleDesk = (
       <group>
         <RoundedBox args={[1.2, 0.05, 0.6]} radius={0.02} position={[0, 0.42, -0.35]} castShadow receiveShadow>
           <meshStandardMaterial color={palette.desk} roughness={0.45} />
@@ -640,6 +666,13 @@ function RoomInterior({ tile, palette }: { tile: Tile; palette: Palette }) {
         ))}
         <Monitor position={[0, 0.445, -0.52]} lit={occupied} />
         <Chair position={[0, 0, 0.12]} rotation={Math.PI} occupied={occupied} seed={id} />
+      </group>
+    );
+    return (
+      <group>
+        <Suspense fallback={simpleDesk}>
+          <OfficeDesk occupied={occupied} seed={id} />
+        </Suspense>
         <Plant position={[tile.w / 2 - 0.25, 0, -tile.d / 2 + 0.25]} scale={1.15} />
       </group>
     );
@@ -1344,3 +1377,4 @@ export default function FloorMap3D({ floor, statusOf }: { floor: LiveFloor; stat
 }
 
 useGLTF.preload(OFFICE_KIT_URL, DRACO_DECODER_PATH);
+useGLTF.preload(DESK_LITE_URL, DRACO_DECODER_PATH);
