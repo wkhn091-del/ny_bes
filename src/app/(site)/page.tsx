@@ -192,8 +192,12 @@ export default async function HomePage() {
             </h2>
             <p className="mt-2 text-muted">
               שלושה סוגי חללים, מחיר שקוף לכל אחד.{' '}
+              <Link href="/building" className="font-semibold text-accent-text hover:underline">
+                סיור בבניין בתלת־ממד
+              </Link>
+              {' · '}
               <Link href="/office" className="font-semibold text-accent-text hover:underline">
-                לראות עמדה מכל זווית בתלת־ממד
+                משרד מבפנים
               </Link>
             </p>
           </div>
