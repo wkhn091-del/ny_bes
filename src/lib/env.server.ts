@@ -67,9 +67,6 @@ const serverEnvSchema = z.object({
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 const REQUIRED_ON_VERCEL: (keyof ServerEnv)[] = [
-  'NEXT_PUBLIC_SANITY_PROJECT_ID',
-  'SANITY_API_READ_TOKEN',
-  'SANITY_API_WRITE_TOKEN',
   'SANITY_WEBHOOK_SECRET',
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
@@ -77,7 +74,6 @@ const REQUIRED_ON_VERCEL: (keyof ServerEnv)[] = [
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
   'RESEND_API_KEY',
-  'TELEGRAM_BOT_TOKEN',
   'NEXT_PUBLIC_TURNSTILE_SITE_KEY',
   'TURNSTILE_SECRET_KEY',
   'UPSTASH_REDIS_REST_URL',
@@ -85,6 +81,14 @@ const REQUIRED_ON_VERCEL: (keyof ServerEnv)[] = [
   'CRON_SECRET',
   'AUTH_WEBHOOK_SECRET',
   'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY',
+];
+
+/** Staging may run on demo content without staff notifications; a production launch may not. */
+const REQUIRED_IN_PRODUCTION_ONLY: (keyof ServerEnv)[] = [
+  'NEXT_PUBLIC_SANITY_PROJECT_ID',
+  'SANITY_API_READ_TOKEN',
+  'SANITY_API_WRITE_TOKEN',
+  'TELEGRAM_BOT_TOKEN',
 ];
 
 function emptyToUndefined(source: NodeJS.ProcessEnv): Record<string, string | undefined> {
@@ -103,7 +107,8 @@ function loadEnv(): ServerEnv {
   }
   const env = parsed.data;
   if (env.VERCEL_ENV === 'production' || env.VERCEL_ENV === 'preview') {
-    const missing = REQUIRED_ON_VERCEL.filter((key) => !env[key]);
+    const required = env.VERCEL_ENV === 'production' ? [...REQUIRED_ON_VERCEL, ...REQUIRED_IN_PRODUCTION_ONLY] : REQUIRED_ON_VERCEL;
+    const missing = required.filter((key) => !env[key]);
     if (missing.length > 0) {
       throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
     }
