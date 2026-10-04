@@ -360,7 +360,7 @@ function FilterPanel({ filters, setFilters, cities, amenities, minDate, maxDate,
         <div className="space-y-2">
           {SPACE_TYPES.map((t) => (
             <label key={t} className="flex cursor-pointer items-center gap-2 text-sm">
-              <input type="checkbox" checked={filters.types.includes(t)} onChange={() => toggleType(t)} className="h-4 w-4 accent-[var(--accent)]" />
+              <input type="checkbox" checked={filters.types.includes(t)} onChange={() => toggleType(t)} className="h-4 w-4 accent-(--accent)" />
               {SPACE_TYPE_LABELS[t]}
             </label>
           ))}
@@ -414,7 +414,7 @@ function FilterPanel({ filters, setFilters, cities, amenities, minDate, maxDate,
           step={5}
           value={filters.priceMax ?? priceBounds.max}
           onChange={(e) => setFilters({ priceMax: Number(e.target.value) >= priceBounds.max ? null : Number(e.target.value) })}
-          className="mt-3 w-full accent-[var(--accent)]"
+          className="mt-3 w-full accent-(--accent)"
           aria-label="מחיר מקסימלי לשעה"
         />
       </fieldset>
@@ -445,7 +445,7 @@ function FilterPanel({ filters, setFilters, cities, amenities, minDate, maxDate,
                 type="checkbox"
                 checked={filters.amenities.includes(a.slug)}
                 onChange={() => toggleAmenity(a.slug)}
-                className="h-4 w-4 accent-[var(--accent)]"
+                className="h-4 w-4 accent-(--accent)"
               />
               {a.name}
             </label>

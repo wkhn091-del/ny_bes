@@ -5,6 +5,7 @@ import { env, isConfigured } from '@/lib/env.server';
 import { logError, logInfo } from '@/lib/logger';
 import { BOOKING_VIEW_SELECT, toBookingView, type BookingRow } from '@/lib/notifications/booking-view';
 import { sendBookingReminder, sendPointsExpiring } from '@/lib/notifications/email';
+import { retryPendingAuthEvents } from '@/lib/server/auth-events';
 import { getStripe } from '@/lib/stripe';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
   if (!isConfigured.supabase()) return NextResponse.json({ error: 'not_configured' }, { status: 503 });
 
   const admin = createSupabaseAdminClient();
-  const summary = { expired: 0, sessionsClosed: 0, reminders: 0, pointsReminders: 0 };
+  const summary = { expired: 0, sessionsClosed: 0, reminders: 0, pointsReminders: 0, authEventsRetried: 0 };
 
   try {
     const { data: expiredCount, error } = await admin.rpc('expire_stale_holds');
@@ -87,6 +88,7 @@ export async function POST(request: NextRequest) {
   }
 
   summary.pointsReminders = await remindExpiringPoints(admin, now);
+  summary.authEventsRetried = await retryPendingAuthEvents(admin);
 
   logInfo('cron.maintenance', 'Run complete', summary);
   return NextResponse.json(summary);

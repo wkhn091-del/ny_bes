@@ -209,7 +209,7 @@ export function CheckoutForm({ initialQuote, request, customerName, billingDefau
                   checked={usePoints}
                   disabled={couponPending}
                   onChange={(e) => togglePoints(e.target.checked)}
-                  className="h-4 w-4 accent-[var(--accent)]"
+                  className="h-4 w-4 accent-(--accent)"
                 />
                 <span>מימוש נקודות להנחה של עד {formatIls(quote.pointsPotentialDiscount)}</span>
               </label>
@@ -226,7 +226,7 @@ export function CheckoutForm({ initialQuote, request, customerName, billingDefau
 
         <section className="space-y-4">
           <label className="flex cursor-pointer items-start gap-3 text-sm">
-            <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[var(--accent)]" required />
+            <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 h-4 w-4 accent-(--accent)" required />
             <span>
               קראתי ואני מסכים/ה ל
               <Link href="/legal/terms" target="_blank" className="font-medium text-accent-text underline">

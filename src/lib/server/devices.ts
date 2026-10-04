@@ -1,6 +1,6 @@
 import 'server-only';
-import { createHash } from 'node:crypto';
-import { headers } from 'next/headers';
+import { createHash, randomUUID } from 'node:crypto';
+import { cookies, headers } from 'next/headers';
 import { env, isConfigured } from '@/lib/env.server';
 import { logError } from '@/lib/logger';
 import { sendSecurityNotice } from '@/lib/notifications/email';
@@ -12,16 +12,36 @@ export interface LoginContext {
   userId: string;
   email: string;
   device: string;
+  deviceId: string;
   ip: string;
 }
 
-/** Reads the device description and IP while the request is still in scope (call before `after`). */
+const DEVICE_COOKIE = 'sh_device';
+const DEVICE_ID = /^[0-9a-f-]{36}$/;
+
+/**
+ * Reads the device description and IP while the request is still in scope (call before `after`).
+ * Must run in a Server Action or Route Handler: it sets a random per-browser id cookie on first login.
+ */
 export async function readLoginContext(userId: string, email: string): Promise<LoginContext> {
   const h = await headers();
+  const jar = await cookies();
+  let deviceId = jar.get(DEVICE_COOKIE)?.value ?? '';
+  if (!DEVICE_ID.test(deviceId)) {
+    deviceId = randomUUID();
+    jar.set(DEVICE_COOKIE, deviceId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 400 * 24 * 3600,
+    });
+  }
   return {
     userId,
     email,
     device: describeUserAgent(h.get('user-agent')?.slice(0, 512) ?? null),
+    deviceId,
     ip: await getClientIp(),
   };
 }
@@ -33,7 +53,7 @@ export async function readLoginContext(userId: string, email: string): Promise<L
 export async function registerLoginDevice(ctx: LoginContext): Promise<void> {
   if (!isConfigured.supabase() || !ctx.email) return;
   try {
-    const deviceKey = createHash('sha256').update(`${ctx.userId}|${ctx.device}`).digest('hex');
+    const deviceKey = createHash('sha256').update(`${ctx.userId}|${ctx.deviceId}|${ctx.device}`).digest('hex');
     const { data: isNew, error } = await createSupabaseAdminClient().rpc('register_device', {
       p_user_id: ctx.userId,
       p_device_key: deviceKey,

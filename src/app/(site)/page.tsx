@@ -1,4 +1,4 @@
-import { ArrowLeft, BadgeCheck, CalendarCheck, CreditCard, MousePointerClick, ShieldCheck, Timer } from 'lucide-react';
+import { ArrowLeft, BadgeCheck, CreditCard, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { FloorMap } from '@/components/home/FloorMap';
@@ -151,8 +151,7 @@ export default async function HomePage() {
         <section className="border-b border-border" aria-labelledby="price-title">
           <div className="reveal mx-auto grid max-w-7xl gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center">
             <div>
-              <p className="text-sm font-semibold text-accent-text">בלי הפתעות בקופה</p>
-              <h2 id="price-title" className="mt-2 text-3xl font-bold tracking-tight">
+              <h2 id="price-title" className="text-3xl font-bold tracking-tight">
                 המחיר שרואים הוא המחיר שמשלמים
               </h2>
               <p className="mt-3 max-w-lg leading-7 text-muted">
@@ -185,6 +184,7 @@ export default async function HomePage() {
               <ButtonLink href={`/spaces/${priceExample.slug}`} className="mt-4 w-full">
                 לבדוק זמינות בחדר הזה
               </ButtonLink>
+              <p className="mt-2 text-center text-xs text-muted">בדיקת זמינות לא מחייבת. משלמים רק בסוף, אחרי שרואים את הסכום.</p>
             </div>
           </div>
         </section>
@@ -207,11 +207,11 @@ export default async function HomePage() {
             <Link
               key={t.type}
               href={`/spaces?type=${t.type}`}
-              className="group overflow-hidden rounded-2xl border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-accent"
+              className="group overflow-hidden rounded-2xl border border-border bg-card transition-[transform,border-color] duration-(--dur-micro) ease-(--ease-out) hover:-translate-y-0.5 hover:border-accent"
             >
               {t.image && (
                 <div className="relative aspect-[16/10] overflow-hidden">
-                  <Image src={t.image.url} alt={t.image.alt} fill sizes="(min-width: 768px) 33vw, 100vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+                  <Image src={t.image.url} alt={t.image.alt} fill sizes="(min-width: 768px) 33vw, 100vw" className="object-cover transition-transform duration-(--dur-reveal) ease-(--ease-out) group-hover:scale-[1.03]" />
                   <RenderBadge image={t.image} />
                 </div>
               )}
@@ -236,30 +236,9 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="border-y border-border bg-subtle" aria-labelledby="how-title">
-        <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
-          <h2 id="how-title" className="text-3xl font-bold tracking-tight">
-            שלושה צעדים, בלי טלפונים
-          </h2>
-          <ol className="reveal mt-10 grid gap-6 md:grid-cols-3">
-            {[
-              { icon: MousePointerClick, title: 'בוחרים חלל', text: 'מסננים לפי עיר, מחיר, גודל וציוד — ורואים רק מה שבאמת פנוי.' },
-              { icon: CalendarCheck, title: 'מסמנים שעות', text: 'שעות תפוסות חסומות בלוח. המחיר מתעדכן מול העיניים, כולל תוספות.' },
-              { icon: Timer, title: 'משלמים ומגיעים', text: 'אישור במייל מיד, תזכורת שעתיים לפני, ואפשר להוסיף ליומן בלחיצה.' },
-            ].map((step) => (
-              <li key={step.title} className="rounded-2xl border border-border bg-card p-6">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent-text">
-                  <step.icon className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <h3 className="mt-4 font-semibold">{step.title}</h3>
-                <p className="mt-1 text-sm leading-6 text-muted">{step.text}</p>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <WhyUs />
+      <div className="border-y border-border bg-subtle">
+        <WhyUs />
+      </div>
 
       <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6" aria-labelledby="branches-title">
         <h2 id="branches-title" className="text-3xl font-bold tracking-tight">
@@ -276,7 +255,7 @@ export default async function HomePage() {
                 className="group relative overflow-hidden rounded-2xl border border-border"
               >
                 <div className="relative aspect-[16/10]">
-                  <Image src={branch.image.url} alt={branch.image.alt} fill sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+                  <Image src={branch.image.url} alt={branch.image.alt} fill sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw" className="object-cover transition-transform duration-(--dur-reveal) ease-(--ease-out) group-hover:scale-[1.03]" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
                   <RenderBadge image={branch.image} className="left-3 top-3" />
                 </div>
@@ -284,7 +263,7 @@ export default async function HomePage() {
                   <p className="text-xs opacity-80">{branch.city.name}</p>
                   <h3 className="text-xl font-bold">
                     {branch.name}
-                    {branch.isFlagship && <span className="mr-2 rounded-full bg-accent px-2 py-0.5 align-middle text-[11px] font-semibold">סניף הדגל</span>}
+                    {branch.isFlagship && <span className="mr-2 rounded-full bg-accent px-2 py-0.5 align-middle text-2xs font-semibold">סניף הדגל</span>}
                   </h3>
                   <p className="mt-1 text-sm opacity-85">
                     {branch.address} · {count} חללים
@@ -304,21 +283,20 @@ export default async function HomePage() {
               <RenderBadge image={flagship.image} />
             </div>
             <div>
-              <p className="text-sm font-semibold text-accent-text">על SpaceHub</p>
-              <h2 id="about-title" className="mt-2 text-3xl font-bold tracking-tight">
+              <h2 id="about-title" className="text-3xl font-bold tracking-tight">
                 נבנה בשביל מי שאין לו זמן לחכות
               </h2>
               <p className="mt-4 leading-8 text-muted">
-                פרילנסרים, יזמים וצוותים קטנים לא צריכים חוזה לשנה — הם צריכים חדר טוב, עכשיו. לכן כל מה שמוצג באתר
-                מגיע ישירות ממערכת ההזמנות: אם כתוב שחדר פנוי, הוא פנוי. אם כתוב מחיר, זה המחיר.
+                פרילנסרים, יזמים וצוותים קטנים לא צריכים חוזה לשנה. הם צריכים חדר טוב, עכשיו. הזמינות באתר מגיעה ישירות
+                ממערכת ההזמנות, ולכן אם כתוב שחדר פנוי, הוא פנוי.
               </p>
               <p className="mt-3 leading-8 text-muted">{flagship.description}</p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <ButtonLink href={`/branches/${flagship.slug}`}>לסניף {flagship.name}</ButtonLink>
-                <ButtonLink href="/spaces" variant="outline">
-                  לכל החללים
-                </ButtonLink>
-              </div>
+              <Link
+                href={`/branches/${flagship.slug}`}
+                className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-accent-text hover:underline"
+              >
+                עוד על סניף {flagship.name} <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              </Link>
             </div>
           </div>
         </section>
@@ -345,16 +323,12 @@ export default async function HomePage() {
 
       <section className="px-4 pb-20 sm:px-6" aria-labelledby="cta-title">
         <div className="reveal relative mx-auto max-w-7xl overflow-hidden rounded-3xl bg-zinc-950 px-6 py-14 text-center text-white sm:px-12 dark:border dark:border-border">
-          <div
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_120%,rgba(124,58,237,0.55),transparent_60%)]"
-            aria-hidden="true"
-          />
           <div className="relative">
             <h2 id="cta-title" className="text-3xl font-bold tracking-tight sm:text-4xl">
-              החדר הבא שלך מחכה במפה
+              בוחרים שעה, ובעוד דקה החדר שלכם
             </h2>
             <p className="mx-auto mt-3 max-w-xl text-white/75">
-              בוחרים סניף ושעות, רואים את הסכום הסופי, ומשלמים. ביטול חינם עד {FREE_CANCELLATION_HOURS} שעות לפני.
+              התוכניות השתנו? ביטול חינם עד {FREE_CANCELLATION_HOURS} שעות לפני, מתוך החשבון, בלי לדבר עם אף אחד.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <ButtonLink href="/spaces" size="lg">

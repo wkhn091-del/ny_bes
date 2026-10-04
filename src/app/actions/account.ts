@@ -72,7 +72,7 @@ export async function updatePhone(input: unknown): Promise<AccountResult> {
   const g = await guard('phone');
   if ('error' in g) return g.error;
   const parsed = z.object({ phone: phoneSchema }).safeParse(input);
-  if (!parsed.success) return { ok: false, code: 'INVALID', message: 'מספר הטלפון אינו תקין.' };
+  if (!parsed.success) return { ok: false, code: 'INVALID', message: 'מספר הטלפון אינו תקין. כתבו מספר ישראלי, למשל 050-1234567.' };
   if (!(await hasStepUp(g.user.id))) return STEP_UP_REQUIRED;
 
   const { error } = await createSupabaseAdminClient()
@@ -110,6 +110,14 @@ export async function updateBillingDefaults(input: unknown): Promise<AccountResu
     logError('account.billing', error);
     return { ok: false, code: 'ERROR', message: GENERIC };
   }
+  after(() =>
+    sendSecurityNotice({
+      to: g.user.email,
+      title: 'פרטי החשבונית בחשבון SpaceHub עודכנו',
+      body: 'שם החברה או מספר ח.פ בחשבון שלך שונו זה עתה. אם זה לא אתם, היכנסו לחשבון ונתקו את כל המכשירים.',
+      idempotencyKey: `billing-${g.user.id}-${Date.now()}`,
+    }),
+  );
   revalidatePath('/account', 'layout');
   return { ok: true, message: 'פרטי החשבונית נשמרו וימולאו אוטומטית בהזמנה הבאה.' };
 }
@@ -238,8 +246,11 @@ export async function setFavorite(input: unknown): Promise<FavoriteResult> {
       .upsert({ user_id: user.id, space_id: spaceId }, { onConflict: 'user_id,space_id', ignoreDuplicates: true });
     if (error) {
       // 23503: the space is not (or no longer) in the catalog mirror.
-      if (error.code !== '23503') logError('account.favorite.add', error);
-      return { ok: false, message: 'לא הצלחנו לשמור את החלל למועדפים.' };
+      if (error.code !== '23503') {
+        logError('account.favorite.add', error);
+        return { ok: false, message: GENERIC };
+      }
+      return { ok: false, message: 'החלל הזה כבר לא זמין לשמירה. רעננו את העמוד ונסו חלל אחר.' };
     }
   } else {
     const { error } = await admin.from('favorites').delete().eq('user_id', user.id).eq('space_id', spaceId);
@@ -353,6 +364,15 @@ export async function deleteAccount(input: unknown): Promise<AccountResult> {
     return { ok: false, code: 'ERROR', message: GENERIC };
   }
   logInfo('account.delete', 'Account deleted', { userId: g.user.id });
+  const deletedEmail = g.user.email;
+  after(() =>
+    sendSecurityNotice({
+      to: deletedEmail,
+      title: 'החשבון שלך ב-SpaceHub נמחק',
+      body: 'החשבון והפרטים האישיים נמחקו. קבלות על הזמנות קודמות נשמרות בלי פרטים מזהים, כנדרש בחוק.',
+      idempotencyKey: `delete-${g.user.id}`,
+    }),
+  );
 
   try {
     const supabase = await createSupabaseServerClient();

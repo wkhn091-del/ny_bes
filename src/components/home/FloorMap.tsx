@@ -208,7 +208,7 @@ export function FloorMap({ layouts }: { layouts: LiveFloor[] }) {
                   setFailed(false);
                 }}
                 className={clsx(
-                  'min-h-9 shrink-0 rounded-full border px-3 text-xs font-medium transition-[background-color,border-color,color,transform] duration-[var(--dur-micro)] ease-[var(--ease-out)] active:scale-95',
+                  'min-h-9 shrink-0 rounded-full border px-3 text-xs font-medium transition-[background-color,border-color,color,transform] duration-(--dur-micro) ease-(--ease-out) active:scale-95',
                   selected ? 'border-accent bg-accent text-white' : 'border-border bg-bg text-muted hover:border-border-strong hover:text-fg',
                 )}
               >

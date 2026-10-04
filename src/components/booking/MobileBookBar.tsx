@@ -37,7 +37,7 @@ export function MobileBookBar({ targetId, priceLabel, unitLabel, reassurance }: 
   return (
     <div
       className={clsx(
-        'fixed inset-x-0 bottom-0 z-30 border-t border-border bg-bg/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.25)] backdrop-blur transition-transform duration-300 motion-reduce:transition-none lg:hidden',
+        'fixed inset-x-0 bottom-0 z-30 border-t border-border bg-bg/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.25)] backdrop-blur transition-transform duration-(--dur-base) ease-(--ease-out) motion-reduce:transition-none lg:hidden',
         visible ? 'translate-y-0' : 'pointer-events-none translate-y-full',
       )}
       aria-hidden={!visible}

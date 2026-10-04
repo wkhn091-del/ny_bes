@@ -42,6 +42,8 @@ region cannot be changed later.
    - `supabase/migrations/0006_vercel_bypass.sql` — outbound calls from the database (cron, auth webhook) add the
      `x-vercel-protection-bypass` header when the Vault secret `spacehub_vercel_bypass` exists, so they reach a
      Preview deployment behind Deployment Protection. Leave the secret unset in Production.
+   - `supabase/migrations/0007_auth_webhook_retry.sql` — keeps auth webhook events whose Sanity sync failed as
+     pending; `/api/cron/maintenance` retries them (up to 10 attempts). Required by the current webhook route.
 3. Vault secrets used by the cron job and the auth webhook. Run the generated `.secrets/vault-<env>.sql` in the SQL
    editor (it deletes and recreates the secrets, so it is safe to re-run), or by hand:
    ```sql

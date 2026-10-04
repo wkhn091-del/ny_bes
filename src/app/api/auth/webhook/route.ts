@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { verifyAuthWebhook } from '@/lib/security/auth-webhook';
 import { env, isConfigured, requireEnv } from '@/lib/env.server';
 import { logError, logInfo, logWarn } from '@/lib/logger';
-import { deleteCustomerCard, syncCustomerCard } from '@/lib/server/customer-sync';
+import { processAuthEvent } from '@/lib/server/auth-events';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 
 const MAX_BODY_BYTES = 4096;
@@ -43,31 +43,27 @@ export async function POST(request: NextRequest) {
   const event = verified.event;
 
   const admin = createSupabaseAdminClient();
-  const { data: inserted, error: ledgerError } = await admin
+  const { error: ledgerError } = await admin
     .from('auth_webhook_events')
     .upsert(
       { event_id: event.id, event_type: event.type, user_id: event.userId },
       { onConflict: 'event_id', ignoreDuplicates: true },
-    )
-    .select('event_id');
-  if (ledgerError) {
-    logError('auth.webhook.ledger', ledgerError);
+    );
+  const { data: row, error: readError } = ledgerError
+    ? { data: null, error: ledgerError }
+    : await admin
+        .from('auth_webhook_events')
+        .select('processed_at, attempts')
+        .eq('event_id', event.id)
+        .maybeSingle();
+  if (readError || !row) {
+    logError('auth.webhook.ledger', readError ?? new Error('ledger row missing'));
     return reply(500, { error: 'retry' });
   }
-  if (!inserted || inserted.length === 0) return reply(200, { duplicate: true });
+  if (row.processed_at) return reply(200, { duplicate: true });
 
-  try {
-    if (event.type === 'user.deleted') {
-      await deleteCustomerCard(event.userId);
-    } else {
-      await syncCustomerCard(event.userId);
-    }
-  } catch (error) {
-    // Let the next delivery retry: forget this id so it is not treated as a duplicate.
-    await admin.from('auth_webhook_events').delete().eq('event_id', event.id);
-    logError('auth.webhook.sync', error, { type: event.type });
-    return reply(500, { error: 'retry' });
-  }
+  const ok = await processAuthEvent(admin, event, (row.attempts as number) ?? 0);
+  if (!ok) return reply(500, { error: 'retry' });
 
   logInfo('auth.webhook', 'Processed', { type: event.type });
   return reply(200, { ok: true });

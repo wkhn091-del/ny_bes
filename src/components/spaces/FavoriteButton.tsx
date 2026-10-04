@@ -78,7 +78,7 @@ export function FavoriteButton({ spaceId, spaceName, className, variant = 'overl
         )}
       >
         <Heart
-          className={clsx('h-4 w-4 transition-all motion-safe:active:scale-125', favorited ? 'fill-danger text-danger' : 'text-fg')}
+          className={clsx('h-4 w-4 transition-[transform,color,fill] duration-(--dur-micro) ease-(--ease-out) motion-safe:active:scale-125', favorited ? 'fill-danger text-danger' : 'text-fg')}
           aria-hidden="true"
         />
         {variant === 'inline' && <span>{favorited ? 'שמור במועדפים' : 'שמירה למועדפים'}</span>}

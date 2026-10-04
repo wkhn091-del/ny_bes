@@ -1,6 +1,7 @@
 import 'server-only';
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
+import { connection } from 'next/server';
 import { isConfigured } from '@/lib/env.server';
 import { logError } from '@/lib/logger';
 import { safeReturnUrl } from '@/lib/security/redirect';
@@ -56,7 +57,9 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
   }
 });
 
+/** Also opts the calling page out of static rendering/ISR explicitly, not only through the cookie read. */
 export async function requireUser(returnTo: string): Promise<SessionUser> {
+  await connection();
   const user = await getSessionUser();
   if (!user) redirect(`/login?returnUrl=${encodeURIComponent(safeReturnUrl(returnTo))}`);
   return user;

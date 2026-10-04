@@ -160,7 +160,7 @@ export function SmartSearch({ variant = 'nav', onNavigate }: { variant?: 'nav' |
       </label>
       <div
         className={cn(
-          'flex items-center gap-2 rounded-full border border-border bg-bg transition-[border-color,box-shadow] duration-[var(--dur-micro)] focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25',
+          'flex items-center gap-2 rounded-full border border-border bg-bg transition-[border-color,box-shadow] duration-(--dur-micro) focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25',
           variant === 'nav' ? 'h-10 px-3' : 'h-12 px-4',
         )}
       >
@@ -254,7 +254,7 @@ export function SmartSearch({ variant = 'nav', onNavigate }: { variant?: 'nav' |
               onClick={() => go(opt.href)}
               onPointerEnter={() => setActive(i)}
               className={cn(
-                'flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 text-sm transition-colors duration-[var(--dur-micro)]',
+                'flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2 text-sm transition-colors duration-(--dur-micro)',
                 i === active ? 'bg-accent-soft' : 'hover:bg-subtle',
               )}
             >
@@ -274,7 +274,7 @@ export function SmartSearch({ variant = 'nav', onNavigate }: { variant?: 'nav' |
                   <span className="shrink-0 text-end">
                     <span className="block text-xs text-muted">החל מ-</span>
                     <span className="block font-semibold tabular-nums">{formatIls(opt.data.priceFrom)}</span>
-                    <span className="block text-[11px] text-muted">{opt.data.priceUnit}</span>
+                    <span className="block text-2xs text-muted">{opt.data.priceUnit}</span>
                   </span>
                 </>
               ) : (

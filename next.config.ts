@@ -45,6 +45,14 @@ const nextConfig: NextConfig = {
         source: '/api/:path*',
         headers: [{ key: 'Cache-Control', value: 'no-store' }],
       },
+      {
+        source: '/:dir(account|checkout|admin|login|auth)/:path*',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
+      },
+      {
+        source: '/:dir(account|checkout|admin|login)',
+        headers: [{ key: 'Cache-Control', value: 'private, no-store, max-age=0' }],
+      },
       // Public, non-personal 3D assets; file names are not hashed, so revalidate daily rather than "immutable".
       {
         source: '/:dir(models|draco)/:file*',

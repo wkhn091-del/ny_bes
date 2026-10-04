@@ -183,7 +183,7 @@ export function NavbarClient({ user: serverUser, favoriteIds }: Props) {
           <div className={clsx('fixed inset-0 z-50 lg:hidden', !open && 'pointer-events-none')} inert={!open}>
             <div
               className={clsx(
-                'absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-[var(--dur-base)] ease-[var(--ease-out)]',
+                'absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-(--dur-base) ease-(--ease-out)',
                 open ? 'opacity-100' : 'opacity-0',
               )}
               onClick={() => setOpen(false)}
@@ -197,7 +197,7 @@ export function NavbarClient({ user: serverUser, favoriteIds }: Props) {
               aria-label="תפריט ראשי"
               className={clsx(
                 'absolute inset-y-0 right-0 flex w-[min(22rem,88vw)] flex-col border-s border-border bg-bg shadow-2xl',
-                'transition-transform duration-[var(--dur-base)] ease-[var(--ease-out)]',
+                'transition-transform duration-(--dur-base) ease-(--ease-out)',
                 open ? 'translate-x-0' : 'translate-x-full',
               )}
             >
@@ -233,7 +233,7 @@ export function NavbarClient({ user: serverUser, favoriteIds }: Props) {
                     <li
                       key={link.href}
                       className={clsx(
-                        'transition-[opacity,translate] duration-[var(--dur-base)] ease-[var(--ease-out)]',
+                        'transition-[opacity,translate] duration-(--dur-base) ease-(--ease-out)',
                         open ? 'translate-x-0 opacity-100' : 'translate-x-4 opacity-0',
                       )}
                       style={{ transitionDelay: open ? `${120 + i * 60}ms` : '0ms' }}

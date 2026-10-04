@@ -539,8 +539,8 @@ function Label({
       <div
         dir="rtl"
         className={
-          'whitespace-nowrap rounded-full border font-semibold shadow-md backdrop-blur transition-all duration-300 ' +
-          (compact ? 'px-2 py-0.5 text-[10px] ' : 'px-2.5 py-1 text-[11px] ') +
+          'whitespace-nowrap rounded-full border font-semibold shadow-md backdrop-blur transition-[transform,padding] duration-(--dur-micro) ease-(--ease-out) ' +
+          (compact ? 'px-2 py-0.5 text-3xs ' : 'px-2.5 py-1 text-2xs ') +
           (theme === 'dark' ? 'border-white/10 bg-black/70 text-white' : 'border-black/5 bg-white/90 text-zinc-900') +
           (expanded ? ' scale-110' : '')
         }
@@ -1250,7 +1250,7 @@ function KitProgress() {
   const { active, progress } = useProgress();
   if (!active) return null;
   return (
-    <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2 rounded-full border border-border bg-bg/85 px-3 py-1.5 text-[11px] text-muted shadow-sm backdrop-blur" role="status">
+    <div className="pointer-events-none absolute bottom-3 left-3 flex items-center gap-2 rounded-full border border-border bg-bg/85 px-3 py-1.5 text-2xs text-muted shadow-sm backdrop-blur" role="status">
       <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-hidden="true" />
       טוען ריהוט תלת־ממדי… {Math.round(progress)}%
     </div>
@@ -1334,7 +1334,7 @@ export default function FloorMap3D({ floor, statusOf }: { floor: LiveFloor; stat
         </IntroClock.Provider>
       </Canvas>
       <div ref={labelLayerRef} className="pointer-events-none absolute inset-0 overflow-hidden" />
-      <p className="pointer-events-none absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-bg/80 px-2.5 py-1 text-[11px] text-muted shadow-sm backdrop-blur">
+      <p className="pointer-events-none absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-bg/80 px-2.5 py-1 text-2xs text-muted shadow-sm backdrop-blur">
         <SkyIcon className="h-3.5 w-3.5 text-accent-text" aria-hidden="true" />
         {formatMinutes(sky.minutes)} · {SKY_COPY[sky.phase].label} בישראל
       </p>

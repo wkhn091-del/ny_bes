@@ -37,7 +37,7 @@ export function StickyCta() {
   return (
     <div
       className={clsx(
-        'fixed bottom-5 left-24 right-4 z-30 transition-[opacity,translate] duration-[var(--dur-base)] ease-[var(--ease-out)] lg:hidden',
+        'fixed bottom-5 left-24 right-4 z-30 transition-[opacity,translate] duration-(--dur-base) ease-(--ease-out) lg:hidden',
         visible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0',
       )}
       inert={!visible}

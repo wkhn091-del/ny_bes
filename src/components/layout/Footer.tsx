@@ -51,7 +51,7 @@ export function Footer({ catalog }: { catalog: Catalog }) {
                 <li key={branch.id} className="w-[72%] shrink-0 snap-start sm:w-auto">
                   <Link
                     href={`/branches/${branch.slug}`}
-                    className="group block overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-[border-color,transform] duration-[var(--dur-base)] ease-[var(--ease-out)] hover:-translate-y-0.5 hover:border-violet-400/60"
+                    className="group block overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] transition-[border-color,transform] duration-(--dur-base) ease-(--ease-out) hover:-translate-y-0.5 hover:border-violet-400/60"
                   >
                     <div className="relative aspect-[16/10] overflow-hidden">
                       <Image
@@ -59,7 +59,7 @@ export function Footer({ catalog }: { catalog: Catalog }) {
                         alt={branch.image.alt}
                         fill
                         sizes="(min-width: 1024px) 20vw, (min-width: 640px) 33vw, 72vw"
-                        className="object-cover transition-transform duration-[var(--dur-reveal)] ease-[var(--ease-out)] group-hover:scale-105"
+                        className="object-cover transition-transform duration-(--dur-reveal) ease-(--ease-out) group-hover:scale-105"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-zinc-950/80 via-transparent to-transparent" />
                       <RenderBadge image={branch.image} className="left-2 top-2" />
@@ -68,7 +68,7 @@ export function Footer({ catalog }: { catalog: Catalog }) {
                     <div className="p-3">
                       <p className="font-semibold text-white">
                         {branch.name}
-                        {branch.isFlagship && <span className="mr-2 rounded-full bg-accent px-2 py-0.5 align-middle text-[10px] font-semibold text-white">הדגל</span>}
+                        {branch.isFlagship && <span className="mr-2 rounded-full bg-accent px-2 py-0.5 align-middle text-3xs font-semibold text-white">הדגל</span>}
                       </p>
                       <p className="mt-1 flex items-center gap-1 truncate text-xs text-zinc-400">
                         <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -109,7 +109,7 @@ export function Footer({ catalog }: { catalog: Catalog }) {
                 href={`https://wa.me/${settings.whatsappNumber}?text=${encodeURIComponent(settings.whatsappMessage)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 text-sm font-semibold text-zinc-950 transition-transform duration-[var(--dur-micro)] ease-[var(--ease-out)] hover:brightness-105 active:scale-[0.97]"
+                className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-whatsapp px-4 text-sm font-semibold text-zinc-950 transition-transform duration-(--dur-micro) ease-(--ease-out) hover:brightness-105 active:scale-[0.97]"
               >
                 <MessageCircle className="h-4 w-4" aria-hidden="true" />
                 וואטסאפ — עונים מהר

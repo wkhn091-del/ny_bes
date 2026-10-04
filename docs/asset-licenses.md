@@ -11,6 +11,12 @@ Every non-code asset shipped in `public/` and where it came from. Update this fi
 | Heebo font | `next/font/google` (self-hosted at build time) | SIL Open Font License 1.1 | |
 | Icons | `lucide-react` | ISC | |
 
+## Attribution
+
+- No asset is CC BY or otherwise requires visible credit, so there is no `/credits` page. Adding such an asset means adding that page in the same commit.
+- Apache-2.0, OFL and ISC need the license text kept with the distributed files, not on-screen credit. The texts ship inside the npm packages in `package-lock.json`.
+- Open: written confirmation from the owner for `tlv-rothschild-hot-desk.webp` should be saved as `docs/licenses/owner-flagship-photo.pdf` (or an email export) before launch.
+
 ## Rules
 
 - Renders must say "הדמיה" visibly and end their alt text with `(הדמיה)`; `src/content/seed-data.test.ts` enforces this for seed content.

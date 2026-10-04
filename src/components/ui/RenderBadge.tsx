@@ -9,7 +9,7 @@ export function RenderBadge({ image, className }: { image: Pick<ImageRef, 'url' 
     <span
       aria-hidden="true"
       className={clsx(
-        'pointer-events-none absolute z-10 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-sm',
+        'pointer-events-none absolute z-10 rounded-md bg-black/60 px-2 py-0.5 text-2xs font-medium text-white backdrop-blur-sm',
         className ?? 'bottom-2 left-2',
       )}
     >

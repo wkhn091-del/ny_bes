@@ -7,7 +7,17 @@ const responseSchema = z.object({
   success: z.boolean(),
   'error-codes': z.array(z.string()).optional(),
   action: z.string().optional(),
+  hostname: z.string().optional(),
 });
+
+function expectedHostname(): string | null {
+  if (env.VERCEL_ENV !== 'production') return null;
+  try {
+    return new URL(env.NEXT_PUBLIC_SITE_URL).hostname;
+  } catch {
+    return null;
+  }
+}
 
 export async function verifyTurnstile(token: string | null | undefined, ip: string, expectedAction: string): Promise<boolean> {
   if (!isConfigured.turnstile()) {
@@ -29,7 +39,15 @@ export async function verifyTurnstile(token: string | null | undefined, ip: stri
     });
     const parsed = responseSchema.safeParse(await res.json());
     if (!parsed.success || !parsed.data.success) return false;
-    if (parsed.data.action && parsed.data.action !== expectedAction) return false;
+    if (parsed.data.action !== expectedAction) {
+      logWarn('turnstile', 'Action mismatch', { expected: expectedAction, got: parsed.data.action ?? 'none' });
+      return false;
+    }
+    const host = expectedHostname();
+    if (host && parsed.data.hostname !== host) {
+      logWarn('turnstile', 'Hostname mismatch', { got: parsed.data.hostname ?? 'none' });
+      return false;
+    }
     return true;
   } catch (error) {
     logWarn('turnstile', 'Verification request failed', { error: String(error) });

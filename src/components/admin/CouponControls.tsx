@@ -86,7 +86,7 @@ export function CouponForm() {
         </label>
       </div>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={onePerUser} onChange={(e) => setOnePerUser(e.target.checked)} className="h-4 w-4 accent-[var(--accent)]" />
+        <input type="checkbox" checked={onePerUser} onChange={(e) => setOnePerUser(e.target.checked)} className="h-4 w-4 accent-(--accent)" />
         פעם אחת לכל משתמש
       </label>
       {feedback && <p className={`text-sm ${feedback.ok ? 'text-success' : 'text-danger'}`}>{feedback.text}</p>}

@@ -30,7 +30,7 @@ export function SpaceCard({ space, branch, remaining, recentBookings, priority, 
     <div className="group relative flex flex-col transition-transform hover:-translate-y-0.5">
       <Link
         href={`/spaces/${space.slug}${query}`}
-        className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all group-hover:border-border-strong group-hover:shadow-lg group-hover:shadow-black/5"
+        className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-border bg-card transition-[border-color,box-shadow] duration-(--dur-micro) ease-(--ease-out) group-hover:border-border-strong group-hover:shadow-lg group-hover:shadow-black/5"
       >
         <div className="relative aspect-[4/3] overflow-hidden bg-subtle">
           {image && (
@@ -39,7 +39,7 @@ export function SpaceCard({ space, branch, remaining, recentBookings, priority, 
               alt={image.alt}
               fill
               sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 100vw"
-              className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+              className="object-cover transition-transform duration-(--dur-reveal) ease-(--ease-out) group-hover:scale-[1.03]"
               priority={priority}
             />
           )}

@@ -28,6 +28,10 @@
   --dur-base: 420ms;
   --dur-reveal: 900ms;
   --stagger: 60ms;
+  --delay-draw: 300ms;
+  --delay-check: 520ms;
+  --delay-burst: 600ms;
+  --delay-rise: 700ms;
   color-scheme: light;
 }
 
@@ -74,6 +78,13 @@
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
   --font-sans: var(--font-heebo), system-ui, sans-serif;
+  --text-3xs: 0.625rem;
+  --text-3xs--line-height: 0.875rem;
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --color-whatsapp: #25d366;
+  --default-transition-duration: var(--dur-micro);
+  --default-transition-timing-function: var(--ease-out);
 }
 
 html {
@@ -144,7 +155,7 @@ body {
   .draw-underline path {
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
-    animation: draw-stroke var(--dur-reveal) var(--ease-out) 300ms forwards;
+    animation: draw-stroke var(--dur-reveal) var(--ease-out) var(--delay-draw) forwards;
   }
 }
 
@@ -158,14 +169,14 @@ body {
   .draw-check path {
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
-    animation: draw-stroke var(--dur-base) var(--ease-out) 520ms forwards;
+    animation: draw-stroke var(--dur-base) var(--ease-out) var(--delay-check) forwards;
   }
   .burst > span {
-    animation: burst 900ms var(--ease-out) 600ms both;
+    animation: burst var(--dur-reveal) var(--ease-out) var(--delay-burst) both;
   }
   .rise {
     animation: rise var(--dur-base) var(--ease-out) both;
-    animation-delay: calc(var(--i, 0) * var(--stagger) + 700ms);
+    animation-delay: calc(var(--i, 0) * var(--stagger) + var(--delay-rise));
   }
 }
 

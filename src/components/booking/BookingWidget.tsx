@@ -319,7 +319,7 @@ export function BookingWidget({
               >
                 <span>{formatWeekdayShort(d)}</span>
                 <span className="text-base font-semibold">{Number(d.slice(8))}</span>
-                {closed && <span className="text-[10px]">סגור</span>}
+                {closed && <span className="text-3xs">סגור</span>}
               </button>
             );
           })}
@@ -365,7 +365,7 @@ export function BookingWidget({
               <span className="block text-xs text-muted">לא זמין בתאריך הזה — חלק מהשעות כבר תפוסות או עברו.</span>
             )}
           </span>
-          <input type="checkbox" checked={isDayPass} onChange={toggleDayPass} disabled={!dayPassAvailable} className="h-4 w-4 accent-[var(--accent)]" />
+          <input type="checkbox" checked={isDayPass} onChange={toggleDayPass} disabled={!dayPassAvailable} className="h-4 w-4 accent-(--accent)" />
         </label>
       )}
 
@@ -456,7 +456,7 @@ export function BookingWidget({
                   type="checkbox"
                   checked={addonIds.includes(addon.id)}
                   onChange={() => toggleAddon(addon.id)}
-                  className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+                  className="mt-0.5 h-4 w-4 accent-(--accent)"
                 />
                 <span className="flex-1">
                   <span className="flex justify-between gap-2 text-sm font-medium">
