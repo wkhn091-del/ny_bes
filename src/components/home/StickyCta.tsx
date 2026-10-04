@@ -37,14 +37,14 @@ export function StickyCta() {
   return (
     <div
       className={clsx(
-        'fixed bottom-5 left-24 right-4 z-30 transition-[opacity,translate] duration-(--dur-base) ease-(--ease-out) lg:hidden',
+        'fixed bottom-4 left-[4.5rem] right-4 z-30 transition-[opacity,translate] duration-(--dur-base) ease-(--ease-out) lg:hidden',
         visible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0',
       )}
       inert={!visible}
     >
       <Link
         href="/spaces"
-        className="flex h-14 items-center justify-center gap-2 rounded-full bg-accent font-semibold text-accent-fg shadow-lg shadow-accent/30"
+        className="flex h-12 items-center justify-center gap-2 rounded-full bg-accent text-sm font-semibold text-accent-fg shadow-lg shadow-accent/30"
       >
         <Search className="h-4 w-4" aria-hidden="true" />
         מה פנוי עכשיו?

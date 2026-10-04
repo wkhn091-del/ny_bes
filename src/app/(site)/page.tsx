@@ -108,19 +108,19 @@ export default async function HomePage() {
   return (
     <>
       <section className="hero-glow relative isolate overflow-hidden border-b border-border">
-        <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-4 pb-10 pt-10 sm:px-6 sm:pb-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:pb-24 lg:pt-20">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-8 px-4 pb-8 pt-6 sm:gap-10 sm:px-6 sm:pt-10 sm:pb-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:pb-24 lg:pt-20">
           <div>
-            <h1 className="text-[2.5rem] font-extrabold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
+            <h1 className="text-[2rem] font-extrabold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
               החדר שלך כבר מחכה במפה
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-muted">
+            <p className="mt-4 max-w-xl text-base leading-7 text-muted sm:mt-6 sm:text-lg sm:leading-8">
               חדרי ישיבות, משרדים פרטיים ועמדות עבודה לפי שעה ב-{branches.length} סניפים ב{cityList}. רואים מה פנוי ברגע
               זה, יודעים את המחיר הסופי מראש, ומשלמים רק על הזמן שצריך.
             </p>
-            <div className="mt-8" id="hero-search">
+            <div className="mt-6 sm:mt-8" id="hero-search">
               <SearchBar cities={cities} minDate={today} maxDate={maxBookableDate()} defaultDate={flagship ? nextOpenDate(flagship) : today} />
             </div>
-            <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
+            <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted sm:mt-6 sm:gap-x-5 sm:gap-y-2 sm:text-sm">
               <li className="flex items-center gap-1.5">
                 <ShieldCheck className="h-4 w-4 text-accent-text" aria-hidden="true" />
                 ביטול חינם עד {FREE_CANCELLATION_HOURS} שעות לפני
@@ -135,7 +135,7 @@ export default async function HomePage() {
               </li>
             </ul>
           </div>
-          <div className="h-[430px] sm:h-[500px] lg:h-[560px]">
+          <div className="h-[340px] sm:h-[500px] lg:h-[560px]">
             {mapLayouts.length > 0 && <FloorMap layouts={mapLayouts} />}
           </div>
         </div>
@@ -143,7 +143,7 @@ export default async function HomePage() {
 
       {priceExample && (
         <section className="border-b border-border" aria-labelledby="price-title">
-          <div className="reveal mx-auto grid max-w-7xl gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center">
+          <div className="reveal mx-auto grid max-w-7xl gap-6 px-4 py-10 sm:gap-8 sm:px-6 sm:py-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-center">
             <div>
               <h2 id="price-title" className="text-3xl font-bold tracking-tight">
                 המחיר שרואים הוא המחיר שמשלמים
@@ -184,8 +184,8 @@ export default async function HomePage() {
         </section>
       )}
 
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6" aria-labelledby="types-title">
-        <div className="mb-10 flex items-end justify-between gap-4">
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-20" aria-labelledby="types-title">
+        <div className="mb-6 flex items-end justify-between gap-4 sm:mb-10">
           <div>
             <h2 id="types-title" className="text-3xl font-bold tracking-tight">
               מה צריך היום?
@@ -201,21 +201,21 @@ export default async function HomePage() {
             לכל החללים <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           </Link>
         </div>
-        <div className="reveal grid gap-5 md:grid-cols-3">
+        <div className="reveal grid gap-4 sm:gap-5 md:grid-cols-3">
           {typeSummaries.map((t) => (
             <Link
               key={t.type}
               href={`/spaces?type=${t.type}`}
-              className="group overflow-hidden rounded-2xl border border-border bg-card transition-[transform,border-color] duration-(--dur-micro) ease-(--ease-out) hover:-translate-y-0.5 hover:border-accent"
+              className="group flex overflow-hidden rounded-2xl border border-border bg-card transition-[transform,border-color] duration-(--dur-micro) ease-(--ease-out) hover:-translate-y-0.5 hover:border-accent md:block"
             >
               {t.image && (
-                <div className="relative aspect-[16/10] overflow-hidden">
-                  <Image src={t.image.url} alt={t.image.alt} fill sizes="(min-width: 768px) 33vw, 100vw" className="object-cover transition-transform duration-(--dur-reveal) ease-(--ease-out) group-hover:scale-[1.03]" />
-                  <RenderBadge image={t.image} />
+                <div className="relative w-28 shrink-0 overflow-hidden sm:w-44 md:aspect-[16/10] md:w-auto">
+                  <Image src={t.image.url} alt={t.image.alt} fill sizes="(min-width: 768px) 33vw, 176px" className="object-cover transition-transform duration-(--dur-reveal) ease-(--ease-out) group-hover:scale-[1.03]" />
+                  <RenderBadge image={t.image} className="bottom-1.5 left-1.5 md:bottom-3 md:left-3" />
                 </div>
               )}
-              <div className="p-5">
-                <div className="flex items-baseline justify-between gap-2">
+              <div className="min-w-0 flex-1 p-3.5 sm:p-5">
+                <div className="flex flex-col gap-0.5 md:flex-row md:items-baseline md:justify-between md:gap-2">
                   <h3 className="text-lg font-semibold">{SPACE_TYPE_LABELS[t.type]}</h3>
                   {t.fromPrice !== null && (
                     <p className="text-sm">
@@ -239,26 +239,28 @@ export default async function HomePage() {
         <WhyUs />
       </div>
 
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6" aria-labelledby="branches-title">
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-20" aria-labelledby="branches-title">
         <h2 id="branches-title" className="text-3xl font-bold tracking-tight">
           הסניפים שלנו
         </h2>
-        <p className="mt-2 text-muted">כולם קרובים לתחבורה ציבורית.</p>
-        <div className="reveal mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <p className="mt-2 text-muted">
+          כולם קרובים לתחבורה ציבורית.<span className="sm:hidden"> החליקו לצדדים לכל הסניפים.</span>
+        </p>
+        <div className="reveal -mx-4 mt-6 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:mt-10 sm:grid sm:grid-cols-2 sm:gap-5 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3">
           {branches.map((branch) => {
             const count = spaces.filter((s) => s.branchId === branch.id).length;
             return (
               <Link
                 key={branch.id}
                 href={`/branches/${branch.slug}`}
-                className="group relative overflow-hidden rounded-2xl border border-border"
+                className="group relative w-[82%] shrink-0 snap-start overflow-hidden rounded-2xl border border-border sm:w-auto"
               >
                 <div className="relative aspect-[16/10]">
                   <Image src={branch.image.url} alt={branch.image.alt} fill sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw" className="object-cover transition-transform duration-(--dur-reveal) ease-(--ease-out) group-hover:scale-[1.03]" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
                   <RenderBadge image={branch.image} className="left-3 top-3" />
                 </div>
-                <div className="absolute inset-x-0 bottom-0 p-5 text-white">
+                <div className="absolute inset-x-0 bottom-0 p-4 text-white sm:p-5">
                   <p className="text-xs opacity-80">{branch.city.name}</p>
                   <h3 className="text-xl font-bold">
                     {branch.name}
@@ -276,7 +278,7 @@ export default async function HomePage() {
 
       {flagship && (
         <section className="border-y border-border bg-subtle" aria-labelledby="about-title">
-          <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 py-20 sm:px-6 lg:grid-cols-2">
+          <div className="mx-auto grid max-w-7xl items-center gap-6 px-4 py-12 sm:gap-10 sm:px-6 sm:py-20 lg:grid-cols-2">
             <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-border">
               <Image src={flagship.image.url} alt={flagship.image.alt} fill sizes="(min-width: 1024px) 50vw, 100vw" className="object-cover" />
               <RenderBadge image={flagship.image} />
@@ -285,11 +287,11 @@ export default async function HomePage() {
               <h2 id="about-title" className="text-3xl font-bold tracking-tight">
                 נבנה בשביל מי שאין לו זמן לחכות
               </h2>
-              <p className="mt-4 leading-8 text-muted">
+              <p className="mt-4 leading-7 text-muted sm:leading-8">
                 פרילנסרים, יזמים וצוותים קטנים לא צריכים חוזה לשנה. הם צריכים חדר טוב, עכשיו. הזמינות באתר מגיעה ישירות
                 ממערכת ההזמנות, ולכן אם כתוב שחדר פנוי, הוא פנוי.
               </p>
-              <p className="mt-3 leading-8 text-muted">{flagship.description}</p>
+              <p className="mt-3 leading-7 text-muted sm:leading-8">{flagship.description}</p>
               <Link
                 href={`/branches/${flagship.slug}`}
                 className="mt-5 inline-flex items-center gap-1 text-sm font-semibold text-accent-text hover:underline"
@@ -301,13 +303,13 @@ export default async function HomePage() {
         </section>
       )}
 
-      <section className="mx-auto max-w-3xl px-4 py-20 sm:px-6" aria-labelledby="faq-title">
+      <section className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-20" aria-labelledby="faq-title">
         <h2 id="faq-title" className="text-center text-3xl font-bold tracking-tight">
           שאלות נפוצות
         </h2>
-        <div className="mt-10 divide-y divide-border rounded-2xl border border-border bg-card">
+        <div className="mt-6 divide-y divide-border rounded-2xl border border-border bg-card sm:mt-10">
           {faqs.map((f) => (
-            <details key={f.q} className="group p-5 [&_summary::-webkit-details-marker]:hidden">
+            <details key={f.q} className="group p-4 sm:p-5 [&_summary::-webkit-details-marker]:hidden">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold">
                 {f.q}
                 <span className="text-xl text-muted transition-transform group-open:rotate-45" aria-hidden="true">
@@ -320,8 +322,8 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="px-4 pb-20 sm:px-6" aria-labelledby="cta-title">
-        <div className="reveal relative mx-auto max-w-7xl overflow-hidden rounded-3xl bg-zinc-950 px-6 py-14 text-center text-white sm:px-12 dark:border dark:border-border">
+      <section className="px-4 pb-24 sm:px-6 sm:pb-20" aria-labelledby="cta-title">
+        <div className="reveal relative mx-auto max-w-7xl overflow-hidden rounded-3xl bg-zinc-950 px-5 py-10 text-center sm:px-6 sm:py-14 text-white sm:px-12 dark:border dark:border-border">
           <div className="relative">
             <h2 id="cta-title" className="text-3xl font-bold tracking-tight sm:text-4xl">
               בוחרים שעה, ובעוד דקה החדר שלכם
@@ -329,7 +331,7 @@ export default async function HomePage() {
             <p className="mx-auto mt-3 max-w-xl text-white/75">
               התוכניות השתנו? ביטול חינם עד {FREE_CANCELLATION_HOURS} שעות לפני, מתוך החשבון, בלי לדבר עם אף אחד.
             </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <div className="mt-6 flex flex-wrap justify-center gap-3 sm:mt-8">
               <ButtonLink href="/spaces" size="lg">
                 מה פנוי עכשיו?
               </ButtonLink>

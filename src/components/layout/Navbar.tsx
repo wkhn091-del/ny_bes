@@ -19,7 +19,7 @@ export async function Navbar() {
       >
         דילוג לתוכן הראשי
       </a>
-      <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6" aria-label="ניווט ראשי">
+      <nav className="mx-auto flex h-14 max-w-7xl sm:h-16 items-center justify-between gap-4 px-4 sm:px-6" aria-label="ניווט ראשי">
         <Link href="/" className="text-fg">
           <Logo />
         </Link>

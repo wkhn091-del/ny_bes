@@ -10,12 +10,38 @@ const ROWS: { label: string; us: string; usual: string }[] = [
 /** Market comparison stays brand-free on purpose: categories only, each claim backed by dated sources in docs/script2/D. */
 export function WhyUs() {
   return (
-    <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6" aria-labelledby="why-title">
+    <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-20" aria-labelledby="why-title">
       <h2 id="why-title" className="max-w-2xl text-3xl font-bold tracking-tight">
         למה להזמין כאן, ולא להתקשר ולחכות שיחזרו אליכם?
       </h2>
 
-      <div className="reveal mt-10 overflow-x-auto rounded-2xl border border-border bg-card">
+      <div className="reveal mt-6 rounded-2xl border border-border bg-card sm:hidden">
+        <p className="px-4 pt-4 text-base font-semibold">ההבדל במבט אחד</p>
+        <p className="px-4 pt-1 text-xs text-muted">השוואה כללית לדרך המקובלת בשוק (מאגרי חללים וטפסי פנייה), נכון לאוקטובר 2026.</p>
+        <dl className="mt-2 divide-y divide-border text-sm">
+          {ROWS.map((r) => (
+            <div key={r.label} className="px-4 py-3">
+              <dt className="font-semibold">{r.label}</dt>
+              <dd className="mt-1.5 flex items-start gap-2">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+                <span>
+                  <span className="sr-only">ב-SpaceHub: </span>
+                  {r.us}
+                </span>
+              </dd>
+              <dd className="mt-1 flex items-start gap-2 text-muted">
+                <Minus className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>
+                  <span className="sr-only">בדרך המקובלת: </span>
+                  {r.usual}
+                </span>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      <div className="reveal mt-10 hidden overflow-x-auto rounded-2xl border border-border bg-card sm:block">
         <table className="w-full min-w-[560px] text-sm">
           <caption className="px-5 pt-5 text-start text-base font-semibold">
             ההבדל במבט אחד

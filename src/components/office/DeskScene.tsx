@@ -9,6 +9,7 @@ import {
   SRGBColorSpace,
   Vector3,
   type DirectionalLight,
+  type PerspectiveCamera,
   type PointLight,
   type Texture,
 } from 'three';
@@ -398,7 +399,6 @@ const isTyping = (t: EventTarget | null) =>
 
 /** Drag-to-look on the canvas and WASD/arrow keys (inside only). Returns the unbind function. */
 function bindLookControls(el: HTMLElement, nav: RefObject<Nav>): () => void {
-  el.style.touchAction = 'none';
   let drag: { id: number; x: number; y: number } | null = null;
   const down = (e: PointerEvent) => {
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
@@ -442,6 +442,16 @@ function bindLookControls(el: HTMLElement, nav: RefObject<Nav>): () => void {
   };
 }
 
+/** Outside, vertical swipes still scroll the page; inside, every touch drives the view. */
+function setTouchMode(el: HTMLElement, inside: boolean) {
+  el.style.touchAction = inside ? 'none' : 'pan-y';
+}
+
+/** Portrait screens see too little sideways at the desktop FOV, so widen it as the aspect narrows. */
+function fovFor(aspect: number): number {
+  return aspect >= 1 ? 62 : Math.min(80, 62 + (1 - aspect) * 40);
+}
+
 /**
  * First-person camera: walks through the doorway on enter/leave, drag to look,
  * click the floor or use WASD/arrows to move while inside.
@@ -462,6 +472,7 @@ function Rig({ inside }: { inside: boolean }) {
   const tmp = useMemo(() => new Vector3(), []);
 
   useEffect(() => bindLookControls(el, nav), [el]);
+  useEffect(() => setTouchMode(el, inside), [el, inside]);
 
   useEffect(() => {
     const n = nav.current;
@@ -519,7 +530,12 @@ function Rig({ inside }: { inside: boolean }) {
       if (Math.abs(d) < 0.002) n.yawGoal = null;
     }
 
-    const cam = state.camera;
+    const cam = state.camera as PerspectiveCamera;
+    const fov = fovFor(state.size.width / state.size.height);
+    if (Math.abs(cam.fov - fov) > 0.05) {
+      cam.fov = fov;
+      cam.updateProjectionMatrix();
+    }
     cam.rotation.order = 'YXZ';
     if (n.snap) {
       cam.position.copy(p);

@@ -169,7 +169,7 @@ export function NavbarClient({ user: serverUser, favoriteIds }: Props) {
             setDrawerMounted(true);
             setOpen(true);
           }}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-border"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-border sm:h-11 sm:w-11"
           aria-expanded={open}
           aria-controls="mobile-menu"
           aria-label="פתיחת תפריט"
@@ -201,7 +201,7 @@ export function NavbarClient({ user: serverUser, favoriteIds }: Props) {
                 open ? 'translate-x-0' : 'translate-x-full',
               )}
             >
-              <div className="flex h-16 shrink-0 items-center justify-between border-b border-border px-4">
+              <div className="flex h-14 shrink-0 items-center justify-between border-b sm:h-16 border-border px-4">
                 <Link href="/" onClick={() => setOpen(false)} className="text-fg">
                   <Logo />
                 </Link>

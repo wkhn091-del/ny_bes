@@ -40,7 +40,7 @@ function useFullscreen(el: HTMLElement | null) {
 
 const chip = 'flex items-center gap-1.5 rounded-full bg-black/60 text-white backdrop-blur';
 const control =
-  'flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
+  'flex items-center gap-2 rounded-full bg-white px-3.5 py-2 text-xs font-semibold sm:px-4 sm:py-2.5 sm:text-sm text-zinc-950 shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
 
 export function DeskShowcase({ className }: { className?: string }) {
   const capable = use3DCapable();
@@ -100,18 +100,23 @@ export function DeskShowcase({ className }: { className?: string }) {
 
           {inside ? (
             <>
-              <button type="button" onClick={() => setInside(false)} className={clsx(control, 'absolute bottom-4 right-4')}>
+              <button type="button" onClick={() => setInside(false)} className={clsx(control, 'absolute bottom-3 right-3 sm:bottom-4 sm:right-4')}>
                 <LogOut className="h-4 w-4" aria-hidden="true" />
                 לצאת מהחדר
               </button>
-              <span className={clsx(chip, 'pointer-events-none absolute bottom-16 left-1/2 -translate-x-1/2 px-3 py-1.5 text-xs text-white/90 sm:bottom-5')}>
+              <span
+                className={clsx(
+                  chip,
+                  'pointer-events-none absolute left-1/2 top-14 -translate-x-1/2 whitespace-nowrap px-3 py-1.5 text-2xs text-white/90 sm:bottom-5 sm:top-auto sm:text-xs',
+                )}
+              >
                 <Hand className="h-3.5 w-3.5" aria-hidden="true" />
-                גררו כדי להסתכל, לחצו על הרצפה כדי ללכת
-                <span className="hidden sm:inline">· או W A S D</span>
+                <span className="sm:hidden">גררו להסתכל · הקישו על הרצפה ללכת</span>
+                <span className="hidden sm:inline">גררו כדי להסתכל, לחצו על הרצפה כדי ללכת · או W A S D</span>
               </span>
             </>
           ) : (
-            <div className="absolute inset-x-0 bottom-6 flex flex-col items-center gap-2">
+            <div className="absolute inset-x-0 bottom-4 flex flex-col items-center gap-1.5 sm:bottom-6 sm:gap-2">
               <button type="button" onClick={() => setInside(true)} className={control}>
                 <DoorOpen className="h-4 w-4" aria-hidden="true" />
                 להיכנס לחדר
