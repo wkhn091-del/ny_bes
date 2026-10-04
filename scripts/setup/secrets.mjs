@@ -112,6 +112,9 @@ for (const key of Object.keys(GENERATORS)) {
   const values = [local.get(key), sets.preview.get(key), sets.production.get(key)];
   if (new Set(values).size !== values.length) throw new Error(`${key} is shared between environments`);
 }
+if (/^(sk|rk)_live_/.test(sets.preview.get('STRIPE_SECRET_KEY') ?? '')) {
+  throw new Error('STRIPE_SECRET_KEY in .secrets/preview.env is a LIVE key — staging must use sk_test_');
+}
 for (const key of SERVICE_KEYS.filter((k) => !k.startsWith('NEXT_PUBLIC_SANITY'))) {
   const value = sets.preview.get(key);
   if (value && value === sets.production.get(key)) throw new Error(`${key} is identical in preview and production`);
