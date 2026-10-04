@@ -84,6 +84,7 @@ const REQUIRED_ON_VERCEL: (keyof ServerEnv)[] = [
   'UPSTASH_REDIS_REST_TOKEN',
   'CRON_SECRET',
   'AUTH_WEBHOOK_SECRET',
+  'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY',
 ];
 
 function emptyToUndefined(source: NodeJS.ProcessEnv): Record<string, string | undefined> {
