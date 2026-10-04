@@ -60,7 +60,7 @@ export function liveMapSpaces(spaces: Space[], branchId: string, usedOf: (spaceI
     .filter((s) => s.branchId === branchId)
     .map((s) => {
       const capacity = capacityOf(s);
-      return { id: s.id, slug: s.slug, name: s.name, type: s.type, capacity, used: Math.min(usedOf(s.id), capacity), seats: s.capacity };
+      return { id: s.id, slug: s.slug, name: s.name, type: s.type, capacity, used: Math.min(usedOf(s.id), capacity), seats: s.capacity, hourlyPrice: s.hourlyPrice };
     });
 }
 

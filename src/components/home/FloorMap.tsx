@@ -121,13 +121,16 @@ function snapshotCaption(floor: LiveFloor, freeCount: number): string {
 }
 
 /**
- * `layout` is the static floor (no occupancy) so the map draws immediately;
- * live occupancy replaces it when the API answers. Until then nothing is shown as free.
+ * `layouts` are the static floors (no occupancy), one per branch, so the map draws immediately;
+ * live occupancy replaces a floor when the API answers. Until then nothing is shown as free.
  */
-export function FloorMap({ layout }: { layout: LiveFloor }) {
-  const [live, setLive] = useState<LiveFloor | null>(null);
+export function FloorMap({ layouts }: { layouts: LiveFloor[] }) {
+  const [branchSlug, setBranchSlug] = useState(layouts[0].branch.slug);
+  const [liveBySlug, setLiveBySlug] = useState<Record<string, { floor: LiveFloor; at: Date }>>({});
   const [failed, setFailed] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const layout = layouts.find((l) => l.branch.slug === branchSlug) ?? layouts[0];
+  const live = liveBySlug[layout.branch.slug]?.floor ?? null;
+  const updatedAt = liveBySlug[layout.branch.slug]?.at ?? null;
   const floor = live ?? layout;
   const pendingLabel = failed ? 'הזמינות אינה זמינה כרגע' : 'בודקים זמינות…';
   const statusOf = (space: LiveSpace) => (live ? spaceStatus(space, live) : { free: 0, label: pendingLabel, available: false });
@@ -141,13 +144,12 @@ export function FloorMap({ layout }: { layout: LiveFloor }) {
     async function load(force = false) {
       if (!force && document.visibilityState === 'hidden') return;
       try {
-        const res = await fetch('/api/availability/now', { cache: 'no-store' });
+        const res = await fetch(`/api/availability/now?branch=${encodeURIComponent(branchSlug)}`, { cache: 'no-store' });
         if (!res.ok) throw new Error(String(res.status));
         const data = (await res.json()) as LiveFloor;
-        if (!cancelled) {
-          setLive(data);
+        if (!cancelled && data.branch?.slug === branchSlug) {
+          setLiveBySlug((prev) => ({ ...prev, [branchSlug]: { floor: data, at: new Date() } }));
           setFailed(false);
-          setUpdatedAt(new Date());
         }
       } catch {
         if (!cancelled) setFailed(true);
@@ -162,7 +164,7 @@ export function FloorMap({ layout }: { layout: LiveFloor }) {
       window.clearInterval(id);
       document.removeEventListener('visibilitychange', onTick);
     };
-  }, []);
+  }, [branchSlug]);
 
   const freeNow = floor.spaces.reduce((sum, s) => sum + statusOf(s).free, 0);
 
@@ -191,6 +193,32 @@ export function FloorMap({ layout }: { layout: LiveFloor }) {
           </span>
         </div>
       </figcaption>
+
+      {layouts.length > 1 && (
+        <div role="group" aria-label="בחירת סניף במפה" className="flex gap-1.5 overflow-x-auto border-b border-border px-3 py-2 [scrollbar-width:none]">
+          {layouts.map((l) => {
+            const selected = l.branch.slug === layout.branch.slug;
+            return (
+              <button
+                key={l.branch.slug}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => {
+                  setBranchSlug(l.branch.slug);
+                  setFailed(false);
+                }}
+                className={clsx(
+                  'min-h-9 shrink-0 rounded-full border px-3 text-xs font-medium transition-[background-color,border-color,color,transform] duration-[var(--dur-micro)] ease-[var(--ease-out)] active:scale-95',
+                  selected ? 'border-accent bg-accent text-white' : 'border-border bg-bg text-muted hover:border-border-strong hover:text-fg',
+                )}
+              >
+                {l.branch.name}
+                <span className={clsx('font-normal', selected ? 'text-white/75' : 'text-muted')}> · {l.branch.city}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div ref={setStage} className="relative min-h-[280px] flex-1" aria-hidden={capable3D ? 'true' : undefined}>
         {!capable3D ? (

@@ -27,14 +27,14 @@ export default async function HomePage() {
   const today = nowInIsrael().date;
   const flagship = branches.find((b) => b.isFlagship) ?? branches[0];
   const mapBranch = liveMapBranch(branches, null);
-  const mapLayout: LiveFloor | null = mapBranch
-    ? {
-        branch: { slug: mapBranch.slug, name: mapBranch.name, city: mapBranch.city.name },
-        isOpen: false,
-        at: null,
-        spaces: liveMapSpaces(spaces, mapBranch.id),
-      }
-    : null;
+  const mapLayouts: LiveFloor[] = (mapBranch ? [mapBranch, ...branches.filter((b) => b.id !== mapBranch.id)] : [])
+    .map((b) => ({
+      branch: { slug: b.slug, name: b.name, city: b.city.name },
+      isOpen: false,
+      at: null,
+      spaces: liveMapSpaces(spaces, b.id),
+    }))
+    .filter((f) => f.spaces.length > 0);
 
   const typeSummaries = SPACE_TYPES.map((type) => {
     const ofType = spaces.filter((s) => s.type === type);
@@ -143,7 +143,7 @@ export default async function HomePage() {
             </ul>
           </div>
           <div className="h-[460px] sm:h-[500px] lg:h-[560px]">
-            {mapLayout && <FloorMap layout={mapLayout} />}
+            {mapLayouts.length > 0 && <FloorMap layouts={mapLayouts} />}
           </div>
         </div>
       </section>

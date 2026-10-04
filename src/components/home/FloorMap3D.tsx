@@ -1,7 +1,8 @@
 'use client';
 
-import { Environment, Html, Lightformer, Merged, PerformanceMonitor, RoundedBox, useGLTF, useProgress } from '@react-three/drei';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Environment, Html, Lightformer, Merged, PerformanceMonitor, RoundedBox, Sparkles, useGLTF, useProgress } from '@react-three/drei';
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
+import { Moon, Sun, Sunset } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useRouter } from 'next/navigation';
 import {
@@ -19,15 +20,21 @@ import {
   type RefObject,
 } from 'react';
 import {
+  AdditiveBlending,
   CanvasTexture,
+  Color,
+  DoubleSide,
   RepeatWrapping,
   SRGBColorSpace,
   Vector3,
   type Group,
   type Mesh,
+  type MeshBasicMaterial,
   type MeshStandardMaterial,
   type OrthographicCamera,
 } from 'three';
+import { formatIls } from '@/lib/domain/pricing';
+import { formatMinutes, nowInIsrael } from '@/lib/domain/time';
 import type { LiveFloor, LiveSpace } from './floor-types';
 
 export const OFFICE_KIT_URL = '/models/office-kit.glb';
@@ -84,6 +91,61 @@ const PALETTES: Record<'light' | 'dark', Palette> = {
     sun: 1.1,
     hemi: 0.3,
   },
+};
+
+// ---------- real Israel time of day ----------
+
+type SkyPhase = 'day' | 'golden' | 'night';
+
+interface Sky {
+  phase: SkyPhase;
+  minutes: number;
+  /** multipliers on the theme palette */
+  sun: number;
+  hemi: number;
+  env: number;
+  color: string;
+  /** unit-ish sun direction; scaled by the scene extent */
+  dir: [number, number, number];
+}
+
+/** Approximate year-round daylight window; the clock shown is exact, the lighting is atmosphere. */
+const SUNRISE_MIN = 6 * 60;
+const SUNSET_MIN = 18 * 60 + 30;
+const GOLDEN = new Color('#ffb070');
+const NOON = new Color('#fff8ee');
+
+function skyAt(minutes: number): Sky {
+  if (minutes < SUNRISE_MIN || minutes >= SUNSET_MIN) {
+    return { phase: 'night', minutes, sun: 0.28, hemi: 0.5, env: 0.55, color: '#9db4ff', dir: [-0.45, 1, 0.3] };
+  }
+  const t = (minutes - SUNRISE_MIN) / (SUNSET_MIN - SUNRISE_MIN);
+  const elevation = Math.sin(t * Math.PI);
+  const warm = Math.min(1, elevation / 0.45);
+  return {
+    phase: elevation < 0.3 ? 'golden' : 'day',
+    minutes,
+    sun: 0.45 + 0.55 * elevation,
+    hemi: 0.75 + 0.25 * elevation,
+    env: 0.8 + 0.2 * elevation,
+    color: `#${GOLDEN.clone().lerp(NOON, warm * warm).getHexString()}`,
+    dir: [0.95 - 1.9 * t, 0.3 + 0.8 * elevation, 0.4],
+  };
+}
+
+function useIsraelSky(): Sky {
+  const [minutes, setMinutes] = useState(() => nowInIsrael().minutes);
+  useEffect(() => {
+    const id = window.setInterval(() => setMinutes(nowInIsrael().minutes), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  return useMemo(() => skyAt(minutes), [minutes]);
+}
+
+const SKY_COPY: Record<SkyPhase, { label: string; Icon: typeof Sun }> = {
+  day: { label: 'אור יום', Icon: Sun },
+  golden: { label: 'שעת זהב', Icon: Sunset },
+  night: { label: 'לילה', Icon: Moon },
 };
 
 const SHIRTS = ['#4f46e5', '#0ea5e9', '#f97316', '#10b981', '#e11d48', '#64748b', '#eab308'];
@@ -352,6 +414,51 @@ function PulseMaterial({ color, base = 1.4, amplitude = 0.5, active }: { color: 
   return <meshStandardMaterial ref={ref} color={color} emissive={color} emissiveIntensity={active ? base : 0.15} toneMapped={!active} />;
 }
 
+let beamAlpha: CanvasTexture | null = null;
+/** Vertical fade (opaque at the floor, clear at the top), shared by every beam. */
+function getBeamAlpha(): CanvasTexture {
+  if (beamAlpha) return beamAlpha;
+  const canvas = document.createElement('canvas');
+  canvas.width = 4;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  const g = ctx.createLinearGradient(0, 0, 0, 128);
+  g.addColorStop(0, '#000');
+  g.addColorStop(0.55, '#333');
+  g.addColorStop(1, '#fff');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 4, 128);
+  beamAlpha = new CanvasTexture(canvas);
+  return beamAlpha;
+}
+
+const BEAM_H = 1.5;
+
+/** A soft column of light over a room that is free right now (live data only). */
+function Beacon({ w, d, strength }: { w: number; d: number; strength: number }) {
+  const ref = useRef<MeshBasicMaterial>(null);
+  const alphaMap = useMemo(() => getBeamAlpha(), []);
+  useFrame(({ clock }) => {
+    if (ref.current) ref.current.opacity = strength * (0.85 + Math.sin(clock.elapsedTime * 1.6) * 0.15);
+  });
+  return (
+    <mesh position={[0, BEAM_H / 2, 0]} scale={[w * 0.46, 1, d * 0.46]} renderOrder={2}>
+      <cylinderGeometry args={[1, 1, BEAM_H, 40, 1, true]} />
+      <meshBasicMaterial
+        ref={ref}
+        color={ACCENT}
+        alphaMap={alphaMap}
+        transparent
+        opacity={strength}
+        blending={AdditiveBlending}
+        side={DoubleSide}
+        depthWrite={false}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+}
+
 const DROP_HEIGHT = 0.9;
 /** Continuous rendering only during the intro and while the pointer is over the map; otherwise frames render on demand. */
 const INTRO_ACTIVE_MS = 3500;
@@ -395,7 +502,23 @@ const COMPACT_BELOW = 560;
  */
 const LabelLayer = createContext<RefObject<HTMLElement> | null>(null);
 
-function Label({ title, status, available, y, theme, expanded = false }: { title: string; status: string; available: boolean; y: number; theme: string; expanded?: boolean }) {
+function Label({
+  title,
+  status,
+  available,
+  y,
+  theme,
+  expanded = false,
+  price,
+}: {
+  title: string;
+  status: string;
+  available: boolean;
+  y: number;
+  theme: string;
+  expanded?: boolean;
+  price?: string;
+}) {
   const compact = useThree((s) => s.size.width < COMPACT_BELOW);
   const portal = useContext(LabelLayer);
   return (
@@ -411,6 +534,12 @@ function Label({ title, status, available, y, theme, expanded = false }: { title
       >
         <span className={available ? 'text-violet-500' : 'text-zinc-400'}>●</span> {title}
         {(!compact || expanded) && <span className="font-normal opacity-70"> · {status}</span>}
+        {expanded && price && (
+          <span className={theme === 'dark' ? 'text-violet-300' : 'text-violet-700'}>
+            {' '}
+            · {price} לשעה
+          </span>
+        )}
       </div>
     </Html>
   );
@@ -533,12 +662,15 @@ function RoomInterior({ tile, palette }: { tile: Tile; palette: Palette }) {
   );
 }
 
+type OpenSpace = (slug: string, e: ThreeEvent<MouseEvent>) => void;
+
 function Room({
   tile,
   order,
   palette,
   status,
   hovered,
+  beam,
   onHover,
   onOpen,
 }: {
@@ -547,8 +679,10 @@ function Room({
   palette: Palette;
   status: string;
   hovered: boolean;
+  /** beam opacity; 0 hides it */
+  beam: number;
   onHover: (id: string | null) => void;
-  onOpen: (slug: string) => void;
+  onOpen: OpenSpace;
 }) {
   return (
     <group position={[tile.x, 0, tile.z]}>
@@ -567,6 +701,7 @@ function Room({
           <RoomInterior tile={tile} palette={palette} />
         </group>
         <GlassRoom w={tile.w} d={tile.d} palette={palette} available={tile.available} hovered={hovered} />
+        {tile.available && beam > 0 && <Beacon w={tile.w} d={tile.d} strength={hovered ? beam * 1.6 : beam} />}
         <mesh
           position={[0, WALL_H / 2, 0]}
           onPointerOver={(e) => {
@@ -581,25 +716,34 @@ function Room({
           onClick={(e) => {
             e.stopPropagation();
             document.body.style.cursor = '';
-            onOpen(tile.space.slug);
+            onOpen(tile.space.slug, e);
           }}
         >
           <boxGeometry args={[tile.w, WALL_H, tile.d]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
         </mesh>
-        <Label title={tile.space.name} status={status} available={tile.available} y={WALL_H + 0.45} expanded={hovered} theme={palette.label} />
+        <Label
+          title={tile.space.name}
+          status={status}
+          available={tile.available}
+          y={WALL_H + 0.45}
+          expanded={hovered}
+          theme={palette.label}
+          price={formatIls(tile.space.hourlyPrice)}
+        />
       </Settle>
     </group>
   );
 }
 
-function DeskUnit({ desk, order, palette, onOpen }: { desk: Desk; order: number; palette: Palette; onOpen: (slug: string) => void }) {
+function DeskUnit({ desk, order, palette, onOpen }: { desk: Desk; order: number; palette: Palette; onOpen: OpenSpace }) {
   return (
     <group
       position={[desk.x, 0, desk.z]}
       onClick={(e) => {
         e.stopPropagation();
-        onOpen(desk.slug);
+        document.body.style.cursor = '';
+        onOpen(desk.slug, e);
       }}
       onPointerOver={() => (document.body.style.cursor = 'pointer')}
       onPointerOut={() => (document.body.style.cursor = '')}
@@ -627,8 +771,13 @@ function DeskUnit({ desk, order, palette, onOpen }: { desk: Desk; order: number;
   );
 }
 
-/** Fits the whole floor into the canvas for any aspect ratio. */
-function FitCamera({ width, depth }: { width: number; depth: number }) {
+interface CameraBase {
+  position: Vector3;
+  zoom: number;
+}
+
+/** Fits the whole floor into the canvas for any aspect ratio and records that framing as the rest pose. */
+function FitCamera({ width, depth, baseRef }: { width: number; depth: number; baseRef: RefObject<CameraBase | null> }) {
   const getState = useThree((s) => s.get);
   const size = useThree((s) => s.size);
   useLayoutEffect(() => {
@@ -660,25 +809,81 @@ function FitCamera({ width, depth }: { width: number; depth: number }) {
     camera.updateMatrixWorld();
     camera.zoom = Math.min(size.width / (maxX - minX), size.height / (maxY - minY)) * 0.94;
     camera.updateProjectionMatrix();
-  }, [getState, size, width, depth]);
+    baseRef.current = { position: camera.position.clone(), zoom: camera.zoom };
+  }, [getState, size, width, depth, baseRef]);
   return null;
 }
 
-function Sway({ children }: { children: ReactNode }) {
+const FOCUS_MS = 560;
+const FOCUS_ZOOM = 2.1;
+
+/** Flies the camera into the chosen room (pan + zoom from the rest pose) before navigating there. */
+function FocusRig({ baseRef, target }: { baseRef: RefObject<CameraBase | null>; target: Vector3 | null }) {
+  const progress = useRef(0);
+  const invalidate = useThree((s) => s.invalidate);
+  useFrame(({ camera }, delta) => {
+    const rest = baseRef.current;
+    if (!rest || !target) return;
+    progress.current = Math.min(1, progress.current + (delta * 1000) / FOCUS_MS);
+    const p = progress.current;
+    const k = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+    const ortho = camera as OrthographicCamera;
+    ortho.position.copy(rest.position).add(new Vector3(target.x * k, 0, target.z * k));
+    ortho.zoom = rest.zoom * (1 + (FOCUS_ZOOM - 1) * k);
+    ortho.updateProjectionMatrix();
+    if (p < 1) invalidate();
+  });
+  return null;
+}
+
+/** Gentle idle drift plus a pointer tilt (max ~6°); holds still while the camera flies into a room. */
+function Sway({ frozen, children }: { frozen: boolean; children: ReactNode }) {
   const ref = useRef<Group>(null);
   useFrame(({ clock, pointer }) => {
-    if (!ref.current) return;
-    const target = Math.sin(clock.elapsedTime * 0.25) * 0.05 + pointer.x * 0.07;
+    if (!ref.current || frozen) return;
+    const target = Math.sin(clock.elapsedTime * 0.25) * 0.04 + pointer.x * 0.06;
     ref.current.rotation.y += (target - ref.current.rotation.y) * 0.05;
+    ref.current.rotation.x += (pointer.y * -0.025 - ref.current.rotation.x) * 0.05;
   });
   return <group ref={ref}>{children}</group>;
 }
 
-function Scene({ floor, palette, dark, statusOf, shadows }: { floor: LiveFloor; palette: Palette; dark: boolean; statusOf: (space: LiveSpace) => string; shadows: boolean }) {
+function Scene({
+  floor,
+  palette,
+  dark,
+  sky,
+  statusOf,
+  shadows,
+}: {
+  floor: LiveFloor;
+  palette: Palette;
+  dark: boolean;
+  sky: Sky;
+  statusOf: (space: LiveSpace) => string;
+  shadows: boolean;
+}) {
   const router = useRouter();
   const [hovered, setHovered] = useState<string | null>(null);
+  const [focus, setFocus] = useState<Vector3 | null>(null);
+  const cameraBase = useRef<CameraBase | null>(null);
+  const navTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(navTimer.current), []);
   const layout = useMemo(() => buildLayout(floor), [floor]);
-  const open = (slug: string) => router.push(`/spaces/${slug}`);
+  const open: OpenSpace = (slug, e) => {
+    if (focus) return;
+    const href = `/spaces/${slug}`;
+    router.prefetch(href);
+    setFocus(e.object.getWorldPosition(new Vector3()));
+    navTimer.current = setTimeout(() => router.push(href), FOCUS_MS + 60);
+  };
+  const hover = (id: string | null) => {
+    setHovered(id);
+    const space = id ? floor.spaces.find((s) => s.id === id) : null;
+    if (space) router.prefetch(`/spaces/${space.slug}`);
+  };
+  const night = sky.phase === 'night';
+  const beam = dark || night ? 0.32 : 0.2;
   const deskSpace = floor.spaces.find((s) => s.type === 'hotDesk');
   const slabW = layout.width + 0.6;
   const slabD = layout.depth + 0.6;
@@ -688,10 +893,12 @@ function Scene({ floor, palette, dark, statusOf, shadows }: { floor: LiveFloor; 
 
   return (
     <>
-      <FitCamera width={layout.width} depth={layout.depth} />
+      <FitCamera width={layout.width} depth={layout.depth} baseRef={cameraBase} />
+      <FocusRig baseRef={cameraBase} target={focus} />
       <directionalLight
-        position={[extent * 0.55, extent * 1.1, extent * 0.35]}
-        intensity={palette.sun}
+        position={[extent * sky.dir[0], extent * sky.dir[1], extent * sky.dir[2]]}
+        intensity={palette.sun * sky.sun}
+        color={sky.color}
         castShadow={shadows}
         shadow-mapSize={[1024, 1024]}
         shadow-bias={-0.0004}
@@ -703,7 +910,16 @@ function Scene({ floor, palette, dark, statusOf, shadows }: { floor: LiveFloor; 
         shadow-camera-near={0.5}
         shadow-camera-far={extent * 4}
       />
-      <Sway>
+      <Sway frozen={focus !== null}>
+        <Sparkles
+          count={night || dark ? 48 : 32}
+          scale={[slabW * 0.9, 1.6, slabD * 0.9]}
+          position={[0, 0.95, 0.25]}
+          size={night || dark ? 2.2 : 1.6}
+          speed={0.22}
+          opacity={night || dark ? 0.75 : 0.5}
+          color={night || dark ? '#c4b5fd' : '#8b5cf6'}
+        />
         <RoundedBox args={[slabW, 0.24, slabD]} radius={0.1} position={[0, -0.12, 0.25]} receiveShadow>
           <meshStandardMaterial color={palette.slabSide} roughness={0.8} />
         </RoundedBox>
@@ -739,7 +955,8 @@ function Scene({ floor, palette, dark, statusOf, shadows }: { floor: LiveFloor; 
             palette={palette}
             status={statusOf(tile.space)}
             hovered={hovered === tile.space.id}
-            onHover={setHovered}
+            beam={beam}
+            onHover={hover}
             onOpen={open}
           />
         ))}
@@ -775,16 +992,25 @@ export default function FloorMap3D({ floor, statusOf }: { floor: LiveFloor; stat
   const { resolvedTheme } = useTheme();
   const dark = resolvedTheme === 'dark';
   const palette = PALETTES[dark ? 'dark' : 'light'];
+  const sky = useIsraelSky();
+  const SkyIcon = SKY_COPY[sky.phase].Icon;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const labelLayerRef = useRef<HTMLDivElement>(null!);
-  const introStartRef = useRef<number | null>(null);
-  const introStart = useCallback((now: number) => {
-    if (introStartRef.current === null) introStartRef.current = now;
-    return introStartRef.current;
-  }, []);
+  const branchSlug = floor.branch.slug;
+  /** One intro per branch: switching branches rebuilds the floor with a fresh drop-in. */
+  const introStart = useMemo(() => {
+    let start: number | null = null;
+    void branchSlug;
+    return (now: number) => (start ??= now);
+  }, [branchSlug]);
   const [onScreen, setOnScreen] = useState(true);
   const [highQuality, setHighQuality] = useState(true);
   const [animating, setAnimating] = useState(true);
+  const [introBranch, setIntroBranch] = useState(branchSlug);
+  if (introBranch !== branchSlug) {
+    setIntroBranch(branchSlug);
+    setAnimating(true);
+  }
   const restTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const restSoon = useCallback((ms: number) => {
@@ -795,7 +1021,7 @@ export default function FloorMap3D({ floor, statusOf }: { floor: LiveFloor; stat
   useEffect(() => {
     restSoon(INTRO_ACTIVE_MS);
     return () => clearTimeout(restTimer.current);
-  }, [restSoon]);
+  }, [restSoon, branchSlug]);
 
   useEffect(() => {
     const el = wrapperRef.current;
@@ -825,19 +1051,23 @@ export default function FloorMap3D({ floor, statusOf }: { floor: LiveFloor; stat
         className="!absolute inset-0"
       >
         <PerformanceMonitor onDecline={() => setHighQuality(false)} flipflops={2} onFallback={() => setHighQuality(false)} />
-        <hemisphereLight args={[dark ? '#c4b5fd' : '#ffffff', dark ? '#0a0a0a' : '#d6d3d1', palette.hemi]} />
-        <StudioEnvironment intensity={palette.envIntensity} />
+        <hemisphereLight args={[dark || sky.phase === 'night' ? '#c4b5fd' : '#ffffff', dark ? '#0a0a0a' : '#d6d3d1', palette.hemi * sky.hemi]} />
+        <StudioEnvironment intensity={palette.envIntensity * sky.env} />
         <IntroClock.Provider value={introStart}>
           <LabelLayer.Provider value={labelLayerRef}>
-            <Suspense fallback={<Scene floor={floor} palette={palette} dark={dark} statusOf={statusOf} shadows={highQuality} />}>
+            <Suspense fallback={<Scene floor={floor} palette={palette} dark={dark} sky={sky} statusOf={statusOf} shadows={highQuality} />}>
               <KitProvider>
-                <Scene floor={floor} palette={palette} dark={dark} statusOf={statusOf} shadows={highQuality} />
+                <Scene floor={floor} palette={palette} dark={dark} sky={sky} statusOf={statusOf} shadows={highQuality} />
               </KitProvider>
             </Suspense>
           </LabelLayer.Provider>
         </IntroClock.Provider>
       </Canvas>
       <div ref={labelLayerRef} className="pointer-events-none absolute inset-0 overflow-hidden" />
+      <p className="pointer-events-none absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-bg/80 px-2.5 py-1 text-[11px] text-muted shadow-sm backdrop-blur">
+        <SkyIcon className="h-3.5 w-3.5 text-accent-text" aria-hidden="true" />
+        {formatMinutes(sky.minutes)} · {SKY_COPY[sky.phase].label} בישראל
+      </p>
       <KitProgress />
     </div>
   );

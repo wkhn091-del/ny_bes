@@ -10,6 +10,8 @@ export interface LiveSpace {
   used: number;
   /** People the space fits; drives the furniture drawn in 3D. */
   seats: number;
+  /** Display only (agorot, incl. VAT); checkout always re-prices on the server. */
+  hourlyPrice: number;
 }
 
 export interface LiveFloor {
