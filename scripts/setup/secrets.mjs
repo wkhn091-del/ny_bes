@@ -33,10 +33,35 @@ function parseEnv(text) {
   return out;
 }
 
+// Filled in by hand from each service's dashboard (test-mode keys for preview).
+const SERVICE_KEYS = [
+  'NEXT_PUBLIC_SANITY_PROJECT_ID',
+  'SANITY_API_READ_TOKEN',
+  'SANITY_API_WRITE_TOKEN',
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'RESEND_API_KEY',
+  'TELEGRAM_BOT_TOKEN',
+  'NEXT_PUBLIC_TURNSTILE_SITE_KEY',
+  'TURNSTILE_SECRET_KEY',
+  'UPSTASH_REDIS_REST_URL',
+  'UPSTASH_REDIS_REST_TOKEN',
+];
+// Provided by Vercel itself at runtime; kept locally only for Vault / webhook URLs.
+const LOCAL_ONLY = new Set(['VERCEL_AUTOMATION_BYPASS_SECRET']);
+
 function fill(values) {
   for (const [key, gen] of Object.entries(GENERATORS)) {
     if (!values.get(key)) values.set(key, gen());
   }
+  return values;
+}
+
+function withServiceSlots(values) {
+  for (const key of SERVICE_KEYS) if (!values.has(key)) values.set(key, '');
   return values;
 }
 
@@ -66,7 +91,7 @@ mkdirSync(secretsDir, { recursive: true });
 const sets = {};
 for (const env of ['preview', 'production']) {
   const path = join(secretsDir, `${env}.env`);
-  sets[env] = fill(existsSync(path) ? parseEnv(readFileSync(path, 'utf8')) : new Map());
+  sets[env] = withServiceSlots(fill(existsSync(path) ? parseEnv(readFileSync(path, 'utf8')) : new Map()));
   writeEnvFile(path, sets[env]);
 }
 
@@ -117,13 +142,15 @@ if (process.argv.includes('--push')) {
   const link = JSON.parse(readFileSync(join(root, '.vercel', 'repo.json'), 'utf8')).projects[0];
   const token = vercelToken();
   for (const env of ['preview', 'production']) {
-    for (const key of Object.keys(GENERATORS)) {
+    const keys = [...sets[env]].filter(([key, value]) => value && !LOCAL_ONLY.has(key)).map(([key]) => key);
+    for (const key of keys) {
+      const type = key.startsWith('NEXT_PUBLIC_') ? 'plain' : 'sensitive';
       const res = await fetch(
         `https://api.vercel.com/v10/projects/${link.id}/env?upsert=true&teamId=${encodeURIComponent(link.orgId)}`,
         {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key, value: sets[env].get(key), type: 'sensitive', target: [env] }),
+          body: JSON.stringify({ key, value: sets[env].get(key), type, target: [env] }),
         },
       );
       console.log(`${res.ok ? '✓' : '✗'} ${env.padEnd(10)} ${key}${res.ok ? '' : ` → HTTP ${res.status} ${(await res.text()).slice(0, 300)}`}`);
