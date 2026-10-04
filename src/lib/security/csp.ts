@@ -38,8 +38,10 @@ export function buildAppCsp(nonce: string): string {
       ga4 && 'https://www.googletagmanager.com',
     ],
     'font-src': ["'self'"],
+    // blob: = same-origin object URLs only: GLTFLoader fetches a model's embedded textures through them.
     'connect-src': [
       "'self'",
+      'blob:',
       supabase,
       sentryIngest,
       'https://challenges.cloudflare.com',

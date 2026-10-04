@@ -55,7 +55,7 @@ const nextConfig: NextConfig = {
       },
       // Public, non-personal 3D assets; file names are not hashed, so revalidate daily rather than "immutable".
       {
-        source: '/:dir(models|draco)/:file*',
+        source: '/:dir(models|draco|hdri|textures)/:file*',
         headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' }],
       },
     ];

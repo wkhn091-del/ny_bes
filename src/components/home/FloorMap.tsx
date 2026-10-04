@@ -3,7 +3,8 @@
 import { clsx } from 'clsx';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
+import { use3DCapable } from '@/components/three/capability';
 import { formatDateHebrew, formatMinutes } from '@/lib/domain/time';
 import { SPACE_TYPE_LABELS } from '@/lib/domain/types';
 import type { LiveFloor, LiveSpace } from './floor-types';
@@ -32,43 +33,6 @@ const FloorMap3D = dynamic(loadFloorMap3D, {
 });
 
 const POLL_MS = 30_000;
-
-function subscribeMotion(cb: () => void) {
-  const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-  mq.addEventListener('change', cb);
-  return () => mq.removeEventListener('change', cb);
-}
-
-/** CPU-emulated WebGL renders the scene on the main thread and freezes the page; those devices get the 2D map. */
-const SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|software|basic render/i;
-
-let webglSupport: boolean | null = null;
-function hasHardwareWebGL(): boolean {
-  if (webglSupport !== null) return webglSupport;
-  try {
-    const canvas = document.createElement('canvas');
-    const gl = (canvas.getContext('webgl2') || canvas.getContext('webgl')) as WebGLRenderingContext | null;
-    if (!gl) {
-      webglSupport = false;
-    } else {
-      const info = gl.getExtension('WEBGL_debug_renderer_info');
-      const renderer = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) ?? '');
-      webglSupport = !SOFTWARE_RENDERER.test(renderer);
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
-    }
-  } catch {
-    webglSupport = false;
-  }
-  return webglSupport;
-}
-
-function use3DCapable(): boolean {
-  return useSyncExternalStore(
-    subscribeMotion,
-    () => !window.matchMedia('(prefers-reduced-motion: reduce)').matches && hasHardwareWebGL() && (navigator.hardwareConcurrency ?? 4) >= 4,
-    () => false,
-  );
-}
 
 /** Starts downloading the 3D chunk (and, through its module-level preload, the model) right after hydration. */
 function usePrefetch3D(enabled: boolean): void {
