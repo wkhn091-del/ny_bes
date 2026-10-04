@@ -75,14 +75,18 @@ function sqlString(value) {
 }
 
 function vaultSql(values, appUrl) {
-  return [
-    '-- Run in the matching Supabase project → SQL editor (once). Never commit this file.',
-    `select vault.create_secret(${sqlString(appUrl)}, 'spacehub_app_url');`,
-    `select vault.create_secret(${sqlString(values.get('CRON_SECRET'))}, 'spacehub_cron_secret');`,
-    `select vault.create_secret(${sqlString(values.get('AUTH_WEBHOOK_SECRET'))}, 'spacehub_auth_webhook_secret');`,
+  const secrets = [
+    ['spacehub_app_url', appUrl],
+    ['spacehub_cron_secret', values.get('CRON_SECRET')],
+    ['spacehub_auth_webhook_secret', values.get('AUTH_WEBHOOK_SECRET')],
     ...(values.get('VERCEL_AUTOMATION_BYPASS_SECRET')
-      ? [`select vault.create_secret(${sqlString(values.get('VERCEL_AUTOMATION_BYPASS_SECRET'))}, 'spacehub_vercel_bypass');`]
+      ? [['spacehub_vercel_bypass', values.get('VERCEL_AUTOMATION_BYPASS_SECRET')]]
       : []),
+  ];
+  return [
+    '-- Run in the matching Supabase project → SQL editor. Safe to re-run. Never commit this file.',
+    `delete from vault.secrets where name in (${secrets.map(([name]) => sqlString(name)).join(', ')});`,
+    ...secrets.map(([name, value]) => `select vault.create_secret(${sqlString(value)}, ${sqlString(name)});`),
     '',
   ].join('\n');
 }
@@ -111,9 +115,6 @@ writeFileSync(localPath, merged, { mode: 0o600 });
 for (const key of Object.keys(GENERATORS)) {
   const values = [local.get(key), sets.preview.get(key), sets.production.get(key)];
   if (new Set(values).size !== values.length) throw new Error(`${key} is shared between environments`);
-}
-if (/^(sk|rk)_live_/.test(sets.preview.get('STRIPE_SECRET_KEY') ?? '')) {
-  throw new Error('STRIPE_SECRET_KEY in .secrets/preview.env is a LIVE key — staging must use sk_test_');
 }
 for (const key of SERVICE_KEYS.filter((k) => !k.startsWith('NEXT_PUBLIC_SANITY'))) {
   const value = sets.preview.get(key);
@@ -147,6 +148,9 @@ function vercelToken() {
 
 // The CLI cannot add a Preview variable for all branches non-interactively, so this uses the REST API.
 if (process.argv.includes('--push')) {
+  if (/^(sk|rk)_live_/.test(sets.preview.get('STRIPE_SECRET_KEY') ?? '')) {
+    throw new Error('STRIPE_SECRET_KEY in .secrets/preview.env is a LIVE key — staging must use sk_test_');
+  }
   const link = JSON.parse(readFileSync(join(root, '.vercel', 'repo.json'), 'utf8')).projects[0];
   const token = vercelToken();
   for (const env of ['preview', 'production']) {
