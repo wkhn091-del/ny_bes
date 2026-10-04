@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    font-family: Arial, "Segoe UI", sans-serif;
+    background: radial-gradient(900px 500px at 15% 110%, #4c1d95 0%, transparent 60%),
+                radial-gradient(700px 400px at 100% 0%, #312e81 0%, transparent 55%), #0b0b10;
+    color: #fff; display: flex; flex-direction: column; justify-content: space-between;
+    padding: 72px 80px; box-sizing: border-box;
+  }
+  .brand { display: flex; align-items: center; gap: 18px; direction: ltr; justify-content: flex-end; }
+  .word { font-size: 44px; font-weight: 900; letter-spacing: -1.5px; }
+  .word b { color: #a78bfa; font-weight: 900; }
+  h1 { font-size: 76px; line-height: 1.12; margin: 0; font-weight: 800; letter-spacing: -1px; }
+  h1 span { color: #c4b5fd; }
+  .chips { display: flex; gap: 16px; flex-wrap: wrap; }
+  .chip { font-size: 28px; padding: 12px 24px; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); }
+  .chip.on { background: #7c3aed; border-color: #7c3aed; }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <svg width="64" height="64" viewBox="0 0 26 26" fill="none">
+      <rect x="1" y="1" width="11" height="11" rx="2.5" stroke="#fff" stroke-width="2"/>
+      <rect x="14" y="1" width="11" height="11" rx="2.5" fill="#7C3AED"/>
+      <rect x="1" y="14" width="11" height="11" rx="2.5" stroke="#fff" stroke-width="2"/>
+      <rect x="14" y="14" width="11" height="11" rx="2.5" stroke="#fff" stroke-width="2"/>
+    </svg>
+    <span class="word">Space<b>Hub</b></span>
+  </div>
+  <h1>חדר ישיבות, משרד או עמדה —<br><span>מוזמנים תוך דקה.</span></h1>
+  <div class="chips">
+    <span class="chip on">זמינות בזמן אמת</span>
+    <span class="chip">מחיר סופי כולל מע״מ</span>
+    <span class="chip">ביטול חינם עד 24 שעות</span>
+  </div>
+</body>
+</html>

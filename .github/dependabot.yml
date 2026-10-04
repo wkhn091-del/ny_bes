@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: sunday
+      time: '06:00'
+      timezone: Asia/Jerusalem
+    open-pull-requests-limit: 10
+    groups:
+      next:
+        patterns: ['next', 'eslint-config-next', 'react', 'react-dom']
+      sanity:
+        patterns: ['sanity', 'next-sanity', '@sanity/*']
+      three:
+        patterns: ['three', '@types/three', '@react-three/*']
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
