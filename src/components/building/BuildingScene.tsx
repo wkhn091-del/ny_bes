@@ -1,13 +1,14 @@
 'use client';
 
 import { Environment, Html, Lightformer, OrbitControls, Stars, useGLTF } from '@react-three/drei';
-import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   CanvasTexture,
   Color,
   Euler,
   type InstancedMesh,
+  type PerspectiveCamera,
   Matrix4,
   Plane,
   PlaneGeometry,
@@ -32,6 +33,7 @@ import {
   programOf,
 } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
+import { bindLookControls, clamp, fovFor, keyDirection, yawToward, type LookState } from '@/components/three/first-person';
 import { KIT_URL, extractKit, type KitPart } from '@/components/three/kit-model';
 
 /** One scene per page, so the facade cutaway uniforms can live at module scope. */
@@ -75,7 +77,7 @@ function buildLayout(): Layout {
       for (const s of [1, -1]) {
         L.desks.push({ f, x: px + dx, z: pz, r: s === 1 ? 0 : Math.PI, s });
         L.chairs.push({ f, x: px + dx, z: pz + s * 1.05, r: s === 1 ? Math.PI : 0 });
-        L.monitors.push({ f, x: px + dx, z: pz + s * 0.12 });
+        L.monitors.push({ f, x: px + dx, z: pz + s * 0.12, s });
       }
     }
   };
@@ -102,7 +104,7 @@ function buildLayout(): Layout {
           for (const side of [-1, 1]) {
             glassRoom(f, x, 6, side, 5, x + 12 > wx1 + 0.01);
             L.exec.push({ f, x: x + 3, z: side * 12.3, r: side === -1 ? 0 : Math.PI });
-            L.monitors.push({ f, x: x + 3, z: side * 12.75 });
+            L.monitors.push({ f, x: x + 3, z: side * 12.75, s: side });
           }
         }
         podRows(f, wx0, wx1, [-4.2, 1.2, 5.8]);
@@ -188,7 +190,14 @@ const MONITOR = [0.56, 0.32, 0.03] as const;
 const TABLE = [4.4, 0.06, 1.4] as const;
 const SCREEN = [0.05, 0.9, 1.6] as const;
 const SOFA = [2.2, 0.75, 0.9] as const;
-const MONITOR_GLOW = new Color('#7f9cff').multiplyScalar(0.9);
+const MONITOR_GLOW = new Color('#6f8ff0').multiplyScalar(0.75);
+const MONITOR_BACK = [0.6, 0.36, 0.025] as const;
+const MONITOR_NECK = [0.05, 0.1, 0.05] as const;
+const MONITOR_FOOT = [0.22, 0.012, 0.16] as const;
+/** Monitor items carry `s`, the side they face; frame and stand sit just behind the screen. */
+const behindScreen = (by: number) => (it: Item): Item => ({ ...it, z: it.z - (it.s ?? 1) * by });
+const BEHIND_FRAME = behindScreen(0.02);
+const BEHIND_STAND = behindScreen(0.05);
 const SCREEN_GLOW = new Color('#6d5cff').multiplyScalar(1.1);
 const LOUNGE_TABLE = [1.6, 0.06, 1.6] as const;
 const NEIGHBOUR_AT: [number, number, number] = [84, 0, 14];
@@ -278,7 +287,8 @@ function CeilingLights({ panels, live, selected }: { panels: Item[]; live: boole
     for (let i = 0; i < panels.length; i++) {
       const it = panels[i]!;
       const wave = Math.min(1, Math.max(0, (t - it.f * WAVE_STEP) / WAVE_FADE));
-      const lvl = wave * st.cur[it.f * 2 + (it.s ?? 0)]! * st.floor[it.f]! * (it.f === selected ? 1.25 : 1);
+      const zone = it.f === selected ? 1.25 : st.cur[it.f * 2 + (it.s ?? 0)]!;
+      const lvl = wave * zone * st.floor[it.f]!;
       arr[i * 3] = WARM.r * lvl;
       arr[i * 3 + 1] = WARM.g * lvl;
       arr[i * 3 + 2] = WARM.b * lvl;
@@ -587,15 +597,22 @@ function SelectedFloorLights({ selected }: { selected: number | null }) {
   );
 }
 
-/** Opens the chosen floor's facade with a short vertical wipe. */
-function CutawayAnimator({ selected }: { selected: number | null }) {
+/**
+ * Opens the chosen floor's facade with a short vertical wipe and hides the floors above it.
+ * While walking, once the camera is inside, the facade closes and the floors above grow back.
+ */
+function CutawayAnimator({ selected, walking }: { selected: number | null; walking: boolean }) {
+  const wasWalking = useRef(false);
   useFrame((_, delta) => {
     const k = Math.min(1, delta * 4);
-    const clipGoal = selected === null ? ROOF_Y + 12 : floorY(selected) + CLEAR_HEIGHT - 0.35;
+    if (wasWalking.current && !walking && selected !== null) CLIP.constant = floorY(selected) + CLEAR_HEIGHT - 0.35;
+    wasWalking.current = walking;
+    const open = selected !== null && !(walking && WALK.inside);
+    const clipGoal = open && selected !== null ? floorY(selected) + CLEAR_HEIGHT - 0.35 : ROOF_Y + 12;
     if (CLIP.constant > ROOF_Y + 12) CLIP.constant = ROOF_Y + 12;
     CLIP.constant += (clipGoal - CLIP.constant) * Math.min(1, delta * 2.6);
-    if (selected === null && CLIP.constant > ROOF_Y + 11.9) CLIP.constant = 1e4;
-    if (selected === null) {
+    if (!open && CLIP.constant > ROOF_Y + 11.9) CLIP.constant = 1e4;
+    if (!open || selected === null) {
       CUT.uCutMax.value += (CUT.uCutMin.value - CUT.uCutMax.value) * k;
       return;
     }
@@ -630,7 +647,7 @@ function goalFor(selected: number | null, aspect: number, pos: Vector3, target: 
 }
 
 /** Orbit camera that flies between the overview and a floor; idles with a slow turn around the tower. */
-function CameraRig({ selected }: { selected: number | null }) {
+function CameraRig({ selected, walking }: { selected: number | null; walking: boolean }) {
   const controls = useRef<OrbitControlsImpl>(null);
   const fly = useRef({ active: true, snap: true, touched: false });
   const goalPos = useMemo(() => new Vector3(), []);
@@ -638,11 +655,22 @@ function CameraRig({ selected }: { selected: number | null }) {
 
   useEffect(() => {
     fly.current.active = true;
-  }, [selected]);
+  }, [selected, walking]);
 
   useFrame((state, delta) => {
     const c = controls.current;
     if (!c) return;
+    if (walking) {
+      c.enabled = false;
+      c.autoRotate = false;
+      return;
+    }
+    const lens = state.camera as PerspectiveCamera;
+    if (lens.fov !== ORBIT_FOV || lens.near !== ORBIT_NEAR) {
+      lens.fov = Math.abs(lens.fov - ORBIT_FOV) < 0.1 ? ORBIT_FOV : lens.fov + (ORBIT_FOV - lens.fov) * Math.min(1, delta * 3);
+      lens.near = ORBIT_NEAR;
+      lens.updateProjectionMatrix();
+    }
     const f = fly.current;
     c.autoRotate = selected === null && !f.touched && !f.active;
     if (!f.active) return;
@@ -680,6 +708,196 @@ function CameraRig({ selected }: { selected: number | null }) {
         fly.current.touched = true;
       }}
     />
+  );
+}
+
+const ORBIT_FOV = 32;
+const ORBIT_NEAR = 0.5;
+const EYE = 1.6;
+const WALK_SPEED = 3;
+const BODY = 0.3;
+/** The walker glides in through the plaza facade along the clear aisle between the lounge and the east wing. */
+const ENTRY_X = 6.5;
+const SPAWN_Z = 6.2;
+const APPROACH_Z = PLATE.z + 9;
+const ARRIVAL_LOOK = { x: 20, z: -3 };
+/** Read by CutawayAnimator: true once the walking camera has passed the facade. */
+const WALK = { inside: false };
+
+type Rect = { x0: number; x1: number; z0: number; z1: number };
+const rectAt = (x: number, z: number, w: number, d: number): Rect => ({ x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 });
+
+function obstaclesFor(layout: Layout, f: number): Rect[] {
+  const on = (list: Item[]) => list.filter((it) => it.f === f);
+  const rects: Rect[] = [{ ...CORE }];
+  for (const g of on(layout.glass)) rects.push(rectAt(g.x, g.z, g.sx ?? 0.06, g.sz ?? 0.06));
+  for (const d of on(layout.desks).map(deskTopOffset)) rects.push(rectAt(d.x, d.z, DESK_TOP[0], DESK_TOP[2]));
+  for (const t of on(layout.tables)) rects.push(rectAt(t.x, t.z, TABLE[0], TABLE[2]));
+  for (const so of on(layout.sofas)) rects.push(rectAt(so.x, so.z, SOFA[0], SOFA[2]));
+  for (const l of on(layout.lounge)) rects.push(rectAt(l.x, l.z, LOUNGE_TABLE[0], LOUNGE_TABLE[2]));
+  for (const e of on(layout.exec)) rects.push(rectAt(e.x, e.z, 1.4, 1.4));
+  return rects;
+}
+
+/** Keeps a point inside the facade and out of walls and furniture, pushing it out along the shortest axis. */
+function keepWalkable(p: Vector3, rects: Rect[]): Vector3 {
+  p.x = clamp(p.x, -PLATE.x + 0.8, PLATE.x - 0.8);
+  p.z = clamp(p.z, -PLATE.z + 0.8, PLATE.z - 0.8);
+  for (const r of rects) {
+    const x0 = r.x0 - BODY;
+    const x1 = r.x1 + BODY;
+    const z0 = r.z0 - BODY;
+    const z1 = r.z1 + BODY;
+    if (p.x <= x0 || p.x >= x1 || p.z <= z0 || p.z >= z1) continue;
+    const dl = p.x - x0;
+    const dr = x1 - p.x;
+    const dn = p.z - z0;
+    const df = z1 - p.z;
+    const m = Math.min(dl, dr, dn, df);
+    if (m === dl) p.x = x0;
+    else if (m === dr) p.x = x1;
+    else if (m === dn) p.z = z0;
+    else p.z = z1;
+  }
+  return p;
+}
+
+function setTouchAction(el: HTMLElement, value: string) {
+  el.style.touchAction = value;
+}
+
+type WalkNav = LookState & { pos: Vector3; path: Vector3[]; snap: boolean; flying: boolean; floor: number };
+
+/**
+ * First-person walk on one floor: glides in through the facade, then drag to look,
+ * click the floor or use WASD/arrows to move. Switching floors arrives straight at the lounge.
+ */
+function WalkRig({ floor, layout }: { floor: number; layout: Layout }) {
+  const el = useThree((st) => st.gl.domElement);
+  const rects = useMemo(() => obstaclesFor(layout, floor), [layout, floor]);
+  const nav = useRef<WalkNav>({
+    pos: new Vector3(),
+    path: [],
+    yaw: 0,
+    pitch: 0,
+    yawGoal: null,
+    keys: new Set(),
+    inside: true,
+    snap: false,
+    flying: false,
+    floor: -1,
+  });
+  const v = useMemo(() => ({ dir: new Vector3(), spawn: new Vector3(), look: new Vector3(), before: new Vector3() }), []);
+
+  useEffect(() => bindLookControls(el, nav), [el]);
+  useEffect(() => {
+    const prev = el.style.touchAction;
+    setTouchAction(el, 'none');
+    return () => setTouchAction(el, prev);
+  }, [el]);
+  useEffect(
+    () => () => {
+      WALK.inside = false;
+    },
+    [],
+  );
+
+  useFrame((state, rawDelta) => {
+    const delta = Math.min(rawDelta, 0.1);
+    const n = nav.current;
+    const cam = state.camera as PerspectiveCamera;
+    const eyeY = floorY(floor) + EYE;
+    const { dir, spawn, look, before } = v;
+    spawn.set(ENTRY_X, eyeY, SPAWN_Z);
+    look.set(ARRIVAL_LOOK.x, eyeY - 0.5, ARRIVAL_LOOK.z);
+
+    if (n.floor !== floor) {
+      const first = n.floor === -1;
+      n.floor = floor;
+      n.keys.clear();
+      if (first) {
+        n.pos.copy(cam.position);
+        cam.getWorldDirection(dir);
+        n.yaw = Math.atan2(-dir.x, -dir.z);
+        n.pitch = Math.asin(clamp(dir.y, -1, 1));
+        n.path = [new Vector3(ENTRY_X, eyeY + 1.2, APPROACH_Z), spawn.clone()];
+        n.flying = true;
+      } else {
+        n.pos.copy(spawn);
+        n.path = [];
+        n.snap = true;
+        n.flying = false;
+        n.yaw = yawToward(spawn, look);
+        n.pitch = -0.08;
+      }
+    }
+
+    const p = n.pos;
+    if (n.keys.size > 0 && !n.flying) {
+      n.path = [];
+      if (keyDirection(n.keys, n.yaw, dir)) p.addScaledVector(dir, WALK_SPEED * delta);
+      keepWalkable(p, rects);
+    } else if (n.path.length > 0) {
+      const target = n.path[0]!;
+      dir.subVectors(target, p);
+      const dist = dir.length();
+      const speed = n.flying ? Math.max(WALK_SPEED * 1.5, dist * 1.8) : WALK_SPEED;
+      const step = speed * delta;
+      const passThrough = n.flying && n.path.length > 1 ? 3 : 0;
+      if (dist <= Math.max(step, passThrough)) {
+        if (n.path.length === 1) p.copy(target);
+        n.path.shift();
+        if (n.path.length === 0) n.flying = false;
+      } else {
+        before.copy(p);
+        p.addScaledVector(dir, step / dist);
+        if (!n.flying) {
+          keepWalkable(p, rects);
+          if (before.distanceTo(p) < step * 0.25) n.path = [];
+        }
+      }
+    }
+
+    if (n.flying) {
+      const goalYaw = yawToward(p, look);
+      const goalPitch = Math.atan2(look.y - p.y, Math.hypot(look.x - p.x, look.z - p.z));
+      const t = Math.min(1, delta * 3);
+      n.yaw += Math.atan2(Math.sin(goalYaw - n.yaw), Math.cos(goalYaw - n.yaw)) * t;
+      n.pitch += (goalPitch - n.pitch) * t;
+    }
+    WALK.inside = p.z < PLATE.z - 0.3 && Math.abs(p.y - eyeY) < 2;
+
+    const fov = fovFor(state.size.width / state.size.height);
+    if (Math.abs(cam.fov - fov) > 0.05 || cam.near !== 0.1) {
+      cam.fov += (fov - cam.fov) * Math.min(1, delta * 3);
+      cam.near = 0.1;
+      cam.updateProjectionMatrix();
+    }
+    cam.rotation.order = 'YXZ';
+    if (n.snap) {
+      cam.position.copy(p);
+      n.snap = false;
+    } else {
+      cam.position.lerp(p, 1 - Math.exp(-delta * (n.flying ? 20 : 8)));
+    }
+    cam.rotation.set(n.pitch, n.yaw, 0);
+  });
+
+  const onFloorClick = (e: ThreeEvent<MouseEvent>) => {
+    const n = nav.current;
+    if (n.flying || e.delta > 6) return;
+    e.stopPropagation();
+    n.keys.clear();
+    const target = keepWalkable(e.point.clone(), rects);
+    target.y = floorY(floor) + EYE;
+    n.path = [target];
+  };
+
+  return (
+    <mesh rotation-x={-Math.PI / 2} position={[0, floorY(floor) + 0.02, 0]} onClick={onFloorClick}>
+      <planeGeometry args={[PLATE.x * 2, PLATE.z * 2]} />
+      <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
+    </mesh>
   );
 }
 
@@ -761,6 +979,15 @@ function Building({ selected, layout }: { selected: number | null; layout: Layou
       <Boxes items={layout.monitors} size={MONITOR} y={1.0}>
         <meshBasicMaterial color={MONITOR_GLOW} toneMapped={false} clippingPlanes={CLIP_PLANES} />
       </Boxes>
+      <Boxes items={layout.monitors} size={MONITOR_BACK} y={1.0} offset={BEHIND_FRAME}>
+        <meshStandardMaterial color="#14161b" roughness={0.45} metalness={0.4} clippingPlanes={CLIP_PLANES} />
+      </Boxes>
+      <Boxes items={layout.monitors} size={MONITOR_NECK} y={0.8} offset={BEHIND_STAND}>
+        <meshStandardMaterial color="#2a2d34" roughness={0.4} metalness={0.6} clippingPlanes={CLIP_PLANES} />
+      </Boxes>
+      <Boxes items={layout.monitors} size={MONITOR_FOOT} y={0.752} offset={BEHIND_STAND}>
+        <meshStandardMaterial color="#2a2d34" roughness={0.4} metalness={0.6} clippingPlanes={CLIP_PLANES} />
+      </Boxes>
       {parts.exec.map((p, i) => (
         <ModelInstances key={i} geometry={p.geometry} material={p.material} items={execElsewhere} />
       ))}
@@ -792,11 +1019,13 @@ function Ready({ onReady }: { onReady: () => void }) {
 export default function BuildingScene({
   active,
   selected,
+  walking,
   onSelect,
   onReady,
 }: {
   active: boolean;
   selected: number | null;
+  walking: boolean;
   onSelect: (i: number) => void;
   onReady: () => void;
 }) {
@@ -805,7 +1034,7 @@ export default function BuildingScene({
     <Canvas
       dpr={[1, 1.6]}
       frameloop={active ? 'always' : 'never'}
-      camera={{ position: [130, 70, 190], fov: 32, near: 0.5, far: 1600 }}
+      camera={{ position: [130, 70, 190], fov: ORBIT_FOV, near: ORBIT_NEAR, far: 1600 }}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
       onCreated={({ gl }) => {
         gl.localClippingEnabled = true;
@@ -841,12 +1070,13 @@ export default function BuildingScene({
           <Neighbour />
         </Suspense>
         <Crown />
-        <FloorHits selected={selected} onSelect={onSelect} />
+        {!walking && <FloorHits selected={selected} onSelect={onSelect} />}
+        {walking && selected !== null && <WalkRig floor={selected} layout={layout} />}
         <SelectedFloorLights selected={selected} />
-        <CutawayAnimator selected={selected} />
+        <CutawayAnimator selected={selected} walking={walking} />
         <Ready onReady={onReady} />
       </Suspense>
-      <CameraRig selected={selected} />
+      <CameraRig selected={selected} walking={walking && selected !== null} />
     </Canvas>
   );
 }

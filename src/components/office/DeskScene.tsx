@@ -2,7 +2,7 @@
 
 import { ContactShadows, Environment, Sparkles, useGLTF, useTexture } from '@react-three/drei';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { Suspense, useEffect, useMemo, useRef, type RefObject } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import {
   CanvasTexture,
   RepeatWrapping,
@@ -14,6 +14,7 @@ import {
   type Texture,
 } from 'three';
 import { DESK_URL, DRACO_PATH, drawDeskScreen, prepareDesk } from '@/components/three/desk-model';
+import { bindLookControls, clamp, fovFor, keyDirection, setTouchMode, yawToward, type LookState } from '@/components/three/first-person';
 
 const HDRI_URL = '/hdri/small-empty-room.hdr';
 const CONCRETE = ['/textures/concrete-diff.webp', '/textures/concrete-rough.webp'];
@@ -35,8 +36,6 @@ const DOOR_OUT = new Vector3(1.4, EYE, ROOM.z1 + 0.7);
 const DOOR_IN = new Vector3(1.4, EYE, ROOM.z1 - 0.6);
 const STAND = new Vector3(1.55, EYE, 0.75);
 
-const yawToward = (from: Vector3, to: Vector3) => Math.atan2(-(to.x - from.x), -(to.z - from.z));
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 function seededRandom(seed: number): () => number {
   let s = seed;
@@ -382,75 +381,11 @@ function LiveLights() {
   );
 }
 
-type Nav = {
+type Nav = LookState & {
   pos: Vector3;
   path: Vector3[];
-  yaw: number;
-  pitch: number;
-  yawGoal: number | null;
-  keys: Set<string>;
-  inside: boolean;
   snap: boolean;
 };
-
-const MOVE_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
-const isTyping = (t: EventTarget | null) =>
-  t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
-
-/** Drag-to-look on the canvas and WASD/arrow keys (inside only). Returns the unbind function. */
-function bindLookControls(el: HTMLElement, nav: RefObject<Nav>): () => void {
-  let drag: { id: number; x: number; y: number } | null = null;
-  const down = (e: PointerEvent) => {
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
-  };
-  const move = (e: PointerEvent) => {
-    if (!drag || drag.id !== e.pointerId) return;
-    const n = nav.current;
-    n.yaw += (e.clientX - drag.x) * 0.0035;
-    n.pitch = clamp(n.pitch + (e.clientY - drag.y) * 0.0035, -0.9, 0.7);
-    n.yawGoal = null;
-    drag.x = e.clientX;
-    drag.y = e.clientY;
-  };
-  const up = () => {
-    drag = null;
-  };
-  const keyDown = (e: KeyboardEvent) => {
-    if (!nav.current.inside || isTyping(e.target)) return;
-    const k = e.key.toLowerCase();
-    if (!MOVE_KEYS.includes(k)) return;
-    nav.current.keys.add(k);
-    if (k.startsWith('arrow')) e.preventDefault();
-  };
-  const keyUp = (e: KeyboardEvent) => {
-    nav.current.keys.delete(e.key.toLowerCase());
-  };
-  const blur = () => nav.current.keys.clear();
-  const win: [string, EventListener][] = [
-    ['pointermove', move as EventListener],
-    ['pointerup', up],
-    ['pointercancel', up],
-    ['keydown', keyDown as EventListener],
-    ['keyup', keyUp as EventListener],
-    ['blur', blur],
-  ];
-  el.addEventListener('pointerdown', down);
-  win.forEach(([t, fn]) => window.addEventListener(t, fn));
-  return () => {
-    el.removeEventListener('pointerdown', down);
-    win.forEach(([t, fn]) => window.removeEventListener(t, fn));
-  };
-}
-
-/** Outside, vertical swipes still scroll the page; inside, every touch drives the view. */
-function setTouchMode(el: HTMLElement, inside: boolean) {
-  el.style.touchAction = inside ? 'none' : 'pan-y';
-}
-
-/** Portrait screens see too little sideways at the desktop FOV, so widen it as the aspect narrows. */
-function fovFor(aspect: number): number {
-  return aspect >= 1 ? 62 : Math.min(80, 62 + (1 - aspect) * 40);
-}
 
 /**
  * First-person camera: walks through the doorway on enter/leave, drag to look,
@@ -502,12 +437,7 @@ function Rig({ inside }: { inside: boolean }) {
 
     if (n.inside && k.size > 0) {
       n.path = [];
-      const fwd = (k.has('w') || k.has('arrowup') ? 1 : 0) - (k.has('s') || k.has('arrowdown') ? 1 : 0);
-      const side = (k.has('d') || k.has('arrowright') ? 1 : 0) - (k.has('a') || k.has('arrowleft') ? 1 : 0);
-      const s = Math.sin(n.yaw);
-      const c = Math.cos(n.yaw);
-      tmp.set(-s * fwd + c * side, 0, -c * fwd - s * side);
-      if (tmp.lengthSq() > 0) p.addScaledVector(tmp.normalize(), WALK_SPEED * delta);
+      if (keyDirection(k, n.yaw, tmp)) p.addScaledVector(tmp, WALK_SPEED * delta);
       clampWalkable(p);
     } else if (n.path.length > 0) {
       const target = n.path[0]!;

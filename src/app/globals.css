@@ -226,6 +226,16 @@ body {
   }
 }
 
+@keyframes elevator-fade {
+  0%,
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes reveal-up {
   from {
     opacity: 0;

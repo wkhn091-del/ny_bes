@@ -6,37 +6,11 @@ import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import { useCallback, useEffect, useState } from 'react';
 import { use3DCapable } from '@/components/three/capability';
+import { useFullscreen, useInView } from '@/components/three/stage-hooks';
 
 const DeskScene = dynamic(() => import('./DeskScene'), { ssr: false });
 
 export const DESK_POSTER = '/images/renders/desk-poster.webp';
-
-/** Mounts the 3D when the stage nears the viewport and pauses rendering when it scrolls away. */
-function useInView(el: HTMLElement | null, margin: string): boolean {
-  const [inView, setInView] = useState(false);
-  useEffect(() => {
-    if (!el) return;
-    const observer = new IntersectionObserver(([entry]) => setInView(!!entry?.isIntersecting), { rootMargin: margin });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [el, margin]);
-  return inView;
-}
-
-function useFullscreen(el: HTMLElement | null) {
-  const [isFull, setIsFull] = useState(false);
-  useEffect(() => {
-    const sync = () => setIsFull(!!el && document.fullscreenElement === el);
-    document.addEventListener('fullscreenchange', sync);
-    return () => document.removeEventListener('fullscreenchange', sync);
-  }, [el]);
-  const toggle = useCallback(() => {
-    if (!el) return;
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void el.requestFullscreen?.().catch(() => {});
-  }, [el]);
-  return { isFull, toggle, supported: typeof document !== 'undefined' && !!document.fullscreenEnabled };
-}
 
 const chip = 'flex items-center gap-1.5 rounded-full bg-black/60 text-white backdrop-blur';
 const control =
