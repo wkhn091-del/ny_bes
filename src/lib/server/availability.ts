@@ -3,6 +3,7 @@ import { isConfigured } from '@/lib/env.server';
 import { logError } from '@/lib/logger';
 import { SLOT_MINUTES, israelToUtc, slotStartsForDate, utcToIsrael } from '@/lib/domain/time';
 import type { Branch, Space } from '@/lib/domain/types';
+import type { LiveSpace } from '@/components/home/floor-types';
 import { createSupabaseAdminClient } from '@/lib/supabase/server';
 
 /** spaceId → (minute-of-day → seats used) for one Israel calendar date. */
@@ -47,6 +48,20 @@ export interface SlotAvailability {
 
 export function capacityOf(space: Pick<Space, 'type' | 'poolSize'>): number {
   return space.type === 'hotDesk' ? (space.poolSize ?? 0) : 1;
+}
+
+/** The branch on the live floor map: the requested one, else the flagship. */
+export function liveMapBranch<B extends Pick<Branch, 'slug' | 'isFlagship'>>(branches: B[], slug: string | null): B | undefined {
+  return branches.find((b) => b.slug === slug) ?? branches.find((b) => b.isFlagship) ?? branches[0];
+}
+
+export function liveMapSpaces(spaces: Space[], branchId: string, usedOf: (spaceId: string) => number = () => 0): LiveSpace[] {
+  return spaces
+    .filter((s) => s.branchId === branchId)
+    .map((s) => {
+      const capacity = capacityOf(s);
+      return { id: s.id, slug: s.slug, name: s.name, type: s.type, capacity, used: Math.min(usedOf(s.id), capacity), seats: s.capacity };
+    });
 }
 
 export function buildSlotAvailability(

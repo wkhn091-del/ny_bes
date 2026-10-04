@@ -2,6 +2,7 @@ import { ArrowLeft, BadgeCheck, CalendarCheck, CreditCard, MousePointerClick, Sh
 import Image from 'next/image';
 import Link from 'next/link';
 import { FloorMap } from '@/components/home/FloorMap';
+import type { LiveFloor } from '@/components/home/floor-types';
 import { StickyCta } from '@/components/home/StickyCta';
 import { WhyUs } from '@/components/home/WhyUs';
 import { SearchBar } from '@/components/search/SearchBar';
@@ -10,6 +11,7 @@ import { getCatalog } from '@/lib/content/catalog';
 import { calculatePrice, formatIls } from '@/lib/domain/pricing';
 import { BOOKING_WINDOW_DAYS, maxBookableDate, nextOpenDate, nowInIsrael } from '@/lib/domain/time';
 import { SPACE_TYPES, SPACE_TYPE_LABELS, type SpaceType } from '@/lib/domain/types';
+import { liveMapBranch, liveMapSpaces } from '@/lib/server/availability';
 import { FREE_CANCELLATION_HOURS } from '@/lib/domain/booking-rules';
 
 const TYPE_COPY: Record<SpaceType, { pitch: string; unit: string }> = {
@@ -23,6 +25,15 @@ export default async function HomePage() {
   const { cities, branches, spaces, settings } = catalog;
   const today = nowInIsrael().date;
   const flagship = branches.find((b) => b.isFlagship) ?? branches[0];
+  const mapBranch = liveMapBranch(branches, null);
+  const mapLayout: LiveFloor | null = mapBranch
+    ? {
+        branch: { slug: mapBranch.slug, name: mapBranch.name, city: mapBranch.city.name },
+        isOpen: false,
+        at: null,
+        spaces: liveMapSpaces(spaces, mapBranch.id),
+      }
+    : null;
 
   const typeSummaries = SPACE_TYPES.map((type) => {
     const ofType = spaces.filter((s) => s.type === type);
@@ -131,7 +142,7 @@ export default async function HomePage() {
             </ul>
           </div>
           <div className="h-[460px] sm:h-[500px] lg:h-[560px]">
-            <FloorMap initial={null} />
+            {mapLayout && <FloorMap layout={mapLayout} />}
           </div>
         </div>
       </section>

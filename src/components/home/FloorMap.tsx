@@ -86,7 +86,7 @@ function usePrefetch3D(enabled: boolean): void {
 
 /**
  * Mounts the 3D once the stage is near the viewport (on phones the map starts below the fold).
- * Takes the element itself, not a ref: the stage only exists after the live data arrives.
+ * Takes the element itself, not a ref, so the observer attaches whenever the stage mounts.
  */
 function useNearViewport(enabled: boolean, el: HTMLElement | null): boolean {
   const [near, setNear] = useState(false);
@@ -120,10 +120,17 @@ function snapshotCaption(floor: LiveFloor, freeCount: number): string {
   return `הסניף סגור כרגע · זמינות לפתיחה, ${formatDateHebrew(floor.at.date)} ${formatMinutes(floor.at.minute)}`;
 }
 
-export function FloorMap({ initial }: { initial: LiveFloor | null }) {
-  const [floor, setFloor] = useState<LiveFloor | null>(initial);
+/**
+ * `layout` is the static floor (no occupancy) so the map draws immediately;
+ * live occupancy replaces it when the API answers. Until then nothing is shown as free.
+ */
+export function FloorMap({ layout }: { layout: LiveFloor }) {
+  const [live, setLive] = useState<LiveFloor | null>(null);
   const [failed, setFailed] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(initial ? new Date() : null);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const floor = live ?? layout;
+  const pendingLabel = failed ? 'הזמינות אינה זמינה כרגע' : 'בודקים זמינות…';
+  const statusOf = (space: LiveSpace) => (live ? spaceStatus(space, live) : { free: 0, label: pendingLabel, available: false });
   const capable3D = use3DCapable();
   const [stage, setStage] = useState<HTMLDivElement | null>(null);
   usePrefetch3D(capable3D);
@@ -138,7 +145,7 @@ export function FloorMap({ initial }: { initial: LiveFloor | null }) {
         if (!res.ok) throw new Error(String(res.status));
         const data = (await res.json()) as LiveFloor;
         if (!cancelled) {
-          setFloor(data);
+          setLive(data);
           setFailed(false);
           setUpdatedAt(new Date());
         }
@@ -149,23 +156,15 @@ export function FloorMap({ initial }: { initial: LiveFloor | null }) {
     const onTick = () => void load();
     const id = window.setInterval(onTick, POLL_MS);
     document.addEventListener('visibilitychange', onTick);
-    if (!initial) void load(true);
+    void load(true);
     return () => {
       cancelled = true;
       window.clearInterval(id);
       document.removeEventListener('visibilitychange', onTick);
     };
-  }, [initial]);
+  }, []);
 
-  if (!floor) {
-    return (
-      <div className="flex h-full items-center justify-center rounded-2xl border border-border bg-card p-6 text-sm text-muted">
-        {failed ? 'המפה החיה אינה זמינה כרגע.' : 'טוען מפה חיה…'}
-      </div>
-    );
-  }
-
-  const freeNow = floor.spaces.reduce((sum, s) => sum + spaceStatus(s, floor).free, 0);
+  const freeNow = floor.spaces.reduce((sum, s) => sum + statusOf(s).free, 0);
 
   return (
     <figure className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card">
@@ -179,7 +178,7 @@ export function FloorMap({ initial }: { initial: LiveFloor | null }) {
             מפה חיה · סניף {floor.branch.name}, {floor.branch.city}
           </p>
           <p className="mt-0.5 text-xs text-muted">
-            {snapshotCaption(floor, freeNow)}
+            {live ? snapshotCaption(live, freeNow) : pendingLabel}
             {updatedAt && ` · עודכן ${updatedAt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}`}
           </p>
         </div>
@@ -197,7 +196,7 @@ export function FloorMap({ initial }: { initial: LiveFloor | null }) {
         {!capable3D ? (
           <FloorMap2D floor={floor} />
         ) : visible ? (
-          <FloorMap3D floor={floor} statusOf={(space) => spaceStatus(space, floor).label} />
+          <FloorMap3D floor={floor} statusOf={(space) => statusOf(space).label} />
         ) : (
           <MapLoading />
         )}
@@ -205,7 +204,7 @@ export function FloorMap({ initial }: { initial: LiveFloor | null }) {
 
       <ul className={clsx(capable3D ? 'sr-only' : 'grid gap-1 border-t border-border p-3 text-xs sm:grid-cols-2')}>
         {floor.spaces.map((space) => {
-          const status = spaceStatus(space, floor);
+          const status = statusOf(space);
           return (
             <li key={space.id}>
               <Link href={`/spaces/${space.slug}`} className="flex items-center justify-between gap-2 rounded-md px-2 py-1 hover:bg-subtle">

@@ -4,7 +4,7 @@ import { SLOT_MINUTES, hoursForDate, nextOpenDate, nowInIsrael, slotStartsForDat
 import { logError } from '@/lib/logger';
 import { rateLimit } from '@/lib/security/rate-limit';
 import { getClientIpFromRequest } from '@/lib/security/request-meta';
-import { capacityOf, getOccupancyForDate } from '@/lib/server/availability';
+import { getOccupancyForDate, liveMapBranch, liveMapSpaces } from '@/lib/server/availability';
 
 /** Live "right now" occupancy for the 3D floor map. Aggregates only. */
 export async function GET(request: NextRequest) {
@@ -20,10 +20,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const catalog = await getCatalog();
-    const branch =
-      catalog.branches.find((b) => b.slug === branchSlug) ??
-      catalog.branches.find((b) => b.isFlagship) ??
-      catalog.branches[0];
+    const branch = liveMapBranch(catalog.branches, branchSlug);
     if (!branch) return NextResponse.json({ error: 'not_found' }, { status: 404 });
 
     const now = new Date();
@@ -39,8 +36,8 @@ export async function GET(request: NextRequest) {
       if (firstSlot !== undefined) at = { date: nextDate, minute: firstSlot };
     }
 
-    const spaces = catalog.spaces.filter((s) => s.branchId === branch.id);
-    const occupancy = at ? await getOccupancyForDate(spaces.map((s) => s.id), at.date) : new Map();
+    const spaceIds = catalog.spaces.filter((s) => s.branchId === branch.id).map((s) => s.id);
+    const occupancy = at ? await getOccupancyForDate(spaceIds, at.date) : new Map();
     const slot = at?.minute ?? -1;
 
     return NextResponse.json(
@@ -48,19 +45,7 @@ export async function GET(request: NextRequest) {
         branch: { slug: branch.slug, name: branch.name, city: branch.city.name },
         isOpen,
         at,
-        spaces: spaces.map((s) => {
-          const capacity = capacityOf(s);
-          const used = (occupancy.get(s.id) as Map<number, number> | undefined)?.get(slot) ?? 0;
-          return {
-            id: s.id,
-            slug: s.slug,
-            name: s.name,
-            type: s.type,
-            capacity,
-            used: Math.min(used, capacity),
-            seats: s.capacity,
-          };
-        }),
+        spaces: liveMapSpaces(catalog.spaces, branch.id, (id) => (occupancy.get(id) as Map<number, number> | undefined)?.get(slot) ?? 0),
       },
       { headers: { 'Cache-Control': 'no-store' } },
     );
