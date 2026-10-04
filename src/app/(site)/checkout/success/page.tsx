@@ -1,9 +1,11 @@
-import { CalendarPlus, CheckCircle2, Clock, Loader2, MapPin, XCircle } from 'lucide-react';
+import { CalendarPlus, Clock, Loader2, MapPin, XCircle } from 'lucide-react';
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { TrackEvent } from '@/components/analytics/TrackEvent';
 import { ClearCart } from '@/components/checkout/ClearCart';
 import { PendingPoller } from '@/components/checkout/PendingPoller';
 import { ButtonLink } from '@/components/ui/Button';
+import { RenderBadge } from '@/components/ui/RenderBadge';
 import { getCatalog } from '@/lib/content/catalog';
 import { env } from '@/lib/env.server';
 import { googleCalendarUrl } from '@/lib/notifications/ics';
@@ -58,6 +60,8 @@ export default async function CheckoutSuccessPage({ searchParams }: PageProps<'/
 
   const catalog = await getCatalog();
   const branch = catalog.branches.find((b) => b.id === booking.branchId);
+  const image = catalog.spaces.find((s) => s.id === booking.spaceId)?.images[0] ?? null;
+  const startsIn = startsInLabel(booking.startsAt);
   const calendarUrl = googleCalendarUrl({
     uid: booking.id,
     start: booking.startsAt,
@@ -69,7 +73,7 @@ export default async function CheckoutSuccessPage({ searchParams }: PageProps<'/
   });
 
   return (
-    <Shell icon={<CheckCircle2 className="h-12 w-12 text-success" aria-hidden="true" />} title="ההזמנה אושרה!">
+    <Shell icon={<SuccessMark />} title="ההזמנה אושרה!">
       <ClearCart />
       <TrackEvent
         name="purchase"
@@ -82,38 +86,51 @@ export default async function CheckoutSuccessPage({ searchParams }: PageProps<'/
           items: [{ item_id: booking.spaceId, item_name: booking.spaceName, item_category: booking.spaceTypeLabel, item_brand: booking.branchName, price: booking.totalAmount / 100, quantity: 1 }],
         }}
       />
-      <p className="text-muted">
+      {startsIn && (
+        <p className="rise text-lg font-semibold text-accent-text" style={{ '--i': 0 } as React.CSSProperties}>
+          {startsIn}
+        </p>
+      )}
+      <p className="rise mt-1 text-muted" style={{ '--i': 1 } as React.CSSProperties}>
         שלחנו אישור ל-<span dir="ltr">{booking.customerEmail}</span>, כולל קובץ להוספה ליומן.
       </p>
-      <div className="mt-8 w-full rounded-2xl border border-border bg-card p-5 text-right">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="font-semibold">{booking.spaceName}</p>
-            <p className="text-sm text-muted">
-              {booking.spaceTypeLabel} · סניף {booking.branchName}
-            </p>
+      <div className="rise mt-8 w-full overflow-hidden rounded-2xl border border-border bg-card text-right" style={{ '--i': 2 } as React.CSSProperties}>
+        {image && (
+          <div className="relative aspect-[16/9]">
+            <Image src={image.url} alt={image.alt} fill sizes="(min-width: 640px) 512px, 100vw" className="object-cover" priority />
+            <RenderBadge image={image} />
           </div>
-          <span className="rounded-md bg-subtle px-2 py-1 font-mono text-xs">{booking.publicCode}</span>
-        </div>
-        <ul className="mt-4 space-y-2 text-sm">
-          <li className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-accent-text" aria-hidden="true" />
-            {booking.dateLabel} · {booking.isDayPass ? `יום שלם (${booking.timeLabel})` : booking.timeLabel}
-            {booking.seats > 1 && ` · ${booking.seats} עמדות`}
-          </li>
-          {branch && (
+        )}
+        <div className="p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-semibold">{booking.spaceName}</p>
+              <p className="text-sm text-muted">
+                {booking.spaceTypeLabel} · סניף {booking.branchName}
+              </p>
+            </div>
+            <span className="rounded-md bg-subtle px-2 py-1 font-mono text-xs">{booking.publicCode}</span>
+          </div>
+          <ul className="mt-4 space-y-2 text-sm">
             <li className="flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-accent-text" aria-hidden="true" />
-              {branch.address}
+              <Clock className="h-4 w-4 text-accent-text" aria-hidden="true" />
+              {booking.dateLabel} · {booking.isDayPass ? `יום שלם (${booking.timeLabel})` : booking.timeLabel}
+              {booking.seats > 1 && ` · ${booking.seats} עמדות`}
             </li>
-          )}
-        </ul>
-        <div className="mt-4 flex justify-between border-t border-border pt-3 text-sm">
-          <span className="text-muted">שולם (כולל מע״מ {booking.formatted.vat})</span>
-          <span className="font-bold">{booking.formatted.total}</span>
+            {branch && (
+              <li className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-accent-text" aria-hidden="true" />
+                {branch.address}
+              </li>
+            )}
+          </ul>
+          <div className="mt-4 flex justify-between border-t border-border pt-3 text-sm">
+            <span className="text-muted">שולם (כולל מע״מ {booking.formatted.vat})</span>
+            <span className="font-bold">{booking.formatted.total}</span>
+          </div>
         </div>
       </div>
-      <div className="mt-6 flex flex-wrap justify-center gap-3">
+      <div className="rise mt-6 flex flex-wrap justify-center gap-3" style={{ '--i': 3 } as React.CSSProperties}>
         <ButtonLink href={calendarUrl} target="_blank" rel="noopener noreferrer" variant="outline">
           <CalendarPlus className="h-4 w-4" aria-hidden="true" />
           הוספה ליומן Google
@@ -126,6 +143,35 @@ export default async function CheckoutSuccessPage({ searchParams }: PageProps<'/
         </a>
       )}
     </Shell>
+  );
+}
+
+/** Real time until the booking starts, from the stored start time. */
+function startsInLabel(startsAt: Date, now: Date = new Date()): string | null {
+  const minutes = Math.round((startsAt.getTime() - now.getTime()) / 60_000);
+  if (minutes <= 0) return null;
+  if (minutes < 60) return `החדר שלך מחכה לך בעוד ${minutes} דקות`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return hours === 1 ? 'החדר שלך מחכה לך בעוד שעה' : `החדר שלך מחכה לך בעוד ${hours} שעות`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? 'החדר שלך מחכה לך מחר' : `החדר שלך מחכה לך בעוד ${days} ימים`;
+}
+
+const BURST = ['#7c3aed', '#a78bfa', '#22c55e', '#f59e0b', '#7c3aed', '#38bdf8', '#a78bfa', '#22c55e', '#f43f5e', '#7c3aed'];
+
+function SuccessMark() {
+  return (
+    <div className="relative h-16 w-16 text-success">
+      <div className="burst pointer-events-none absolute inset-0" aria-hidden="true">
+        {BURST.map((color, i) => (
+          <span key={i} style={{ background: color, '--a': `${(360 / BURST.length) * i}deg` } as React.CSSProperties} />
+        ))}
+      </div>
+      <svg className="draw-check h-16 w-16" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+        <circle cx="32" cy="32" r="29" stroke="currentColor" strokeWidth="4" pathLength="1" />
+        <path d="M20 33l8 8 16-17" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" pathLength="1" />
+      </svg>
+    </div>
   );
 }
 

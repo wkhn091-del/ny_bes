@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { RollingNumber } from '@/components/ui/RollingNumber';
 import { SideDrawer } from '@/components/ui/SideDrawer';
 import { formatIls, type PriceBreakdown } from '@/lib/domain/pricing';
 import { formatDateHebrew } from '@/lib/domain/time';
@@ -72,7 +73,7 @@ export function BookingSummaryDrawer(props: Props) {
         <>
           <div className="mb-3 flex items-baseline justify-between">
             <span className="text-sm text-muted">סה״כ לתשלום</span>
-            <span className="text-2xl font-bold tabular-nums">{formatIls(price.total)}</span>
+            <RollingNumber value={price.total} className="text-2xl font-bold" />
           </div>
           <Button size="lg" className="w-full" onClick={onConfirm} disabled={navigating}>
             {navigating ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}

@@ -25,6 +25,8 @@ export default async function HomePage() {
   const catalog = await getCatalog();
   const { cities, branches, spaces, settings } = catalog;
   const today = nowInIsrael().date;
+  const cityNames = cities.map((c) => c.name);
+  const cityList = cityNames.length > 1 ? `${cityNames.slice(0, -1).join(', ')} ו${cityNames.at(-1)}` : (cityNames[0] ?? '');
   const flagship = branches.find((b) => b.isFlagship) ?? branches[0];
   const mapBranch = liveMapBranch(branches, null);
   const mapLayouts: LiveFloor[] = (mapBranch ? [mapBranch, ...branches.filter((b) => b.id !== mapBranch.id)] : [])
@@ -105,24 +107,21 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="grid-backdrop hero-glow overflow-hidden border-b border-border">
+      <section className="hero-glow relative isolate overflow-hidden border-b border-border">
         <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-10 px-4 pb-16 pt-10 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:pb-24 lg:pt-20">
           <div>
-            <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted">
-              <span className="relative flex h-2 w-2" aria-hidden="true">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60 motion-reduce:hidden" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
-              </span>
-              {branches.length} סניפים ב-{cities.length} ערים · זמינות בזמן אמת
-            </p>
             <h1 className="text-[2.5rem] font-extrabold leading-[1.08] tracking-tight sm:text-5xl lg:text-6xl">
-              חלל העבודה הבא שלך,
-              <br />
-              <span className="text-accent-text">מוזמן תוך דקה.</span>
+              החדר שלך כבר מחכה{' '}
+              <span className="relative inline-block whitespace-nowrap">
+                במפה
+                <svg className="draw-underline absolute -bottom-2 left-0 h-3 w-full text-accent" viewBox="0 0 200 12" preserveAspectRatio="none" aria-hidden="true">
+                  <path d="M3 9C40 3 120 1 197 6" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" pathLength="1" />
+                </svg>
+              </span>
             </h1>
-            <p className="mt-5 max-w-xl text-lg leading-8 text-muted">
-              חדרי ישיבות, משרדים פרטיים ועמדות עבודה לפי שעה. רואים מה פנוי עכשיו, יודעים את המחיר הסופי מראש, ומשלמים
-              רק על הזמן שצריך.
+            <p className="mt-6 max-w-xl text-lg leading-8 text-muted">
+              חדרי ישיבות, משרדים פרטיים ועמדות עבודה לפי שעה ב-{branches.length} סניפים ב{cityList}. רואים מה פנוי ברגע
+              זה, יודעים את המחיר הסופי מראש, ומשלמים רק על הזמן שצריך.
             </p>
             <div className="mt-8" id="hero-search">
               <SearchBar cities={cities} minDate={today} maxDate={maxBookableDate()} defaultDate={flagship ? nextOpenDate(flagship) : today} />
@@ -247,14 +246,11 @@ export default async function HomePage() {
               { icon: MousePointerClick, title: 'בוחרים חלל', text: 'מסננים לפי עיר, מחיר, גודל וציוד — ורואים רק מה שבאמת פנוי.' },
               { icon: CalendarCheck, title: 'מסמנים שעות', text: 'שעות תפוסות חסומות בלוח. המחיר מתעדכן מול העיניים, כולל תוספות.' },
               { icon: Timer, title: 'משלמים ומגיעים', text: 'אישור במייל מיד, תזכורת שעתיים לפני, ואפשר להוסיף ליומן בלחיצה.' },
-            ].map((step, i) => (
+            ].map((step) => (
               <li key={step.title} className="rounded-2xl border border-border bg-card p-6">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent-text">
-                    <step.icon className="h-5 w-5" aria-hidden="true" />
-                  </span>
-                  <span className="font-mono text-sm text-muted">0{i + 1}</span>
-                </div>
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent-text">
+                  <step.icon className="h-5 w-5" aria-hidden="true" />
+                </span>
                 <h3 className="mt-4 font-semibold">{step.title}</h3>
                 <p className="mt-1 text-sm leading-6 text-muted">{step.text}</p>
               </li>

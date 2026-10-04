@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { RollingNumber } from '@/components/ui/RollingNumber';
 import { BookingSummaryDrawer } from './BookingSummaryDrawer';
 import { calculatePrice, formatIls, type PricingSettings } from '@/lib/domain/pricing';
 import {
@@ -501,7 +502,9 @@ export function BookingWidget({
             ))}
             <div className="flex justify-between border-t border-border pt-2 text-base font-bold">
               <dt>סה״כ</dt>
-              <dd>{formatIls(price.total)}</dd>
+              <dd>
+                <RollingNumber value={price.total} />
+              </dd>
             </div>
           </dl>
         ) : null}
