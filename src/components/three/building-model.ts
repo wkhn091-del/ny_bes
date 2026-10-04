@@ -24,6 +24,28 @@ export const CORE = { x0: -7.2, x1: 7.2, z0: -13.4, z1: 4.4 };
 
 export const floorY = (i: number) => FIRST_FLOOR_Y + i * FLOOR_PITCH;
 
+/** Structural columns, 0.8 m square, on the same grid on every floor (measured from the model). */
+export const COLUMN_SIZE = 0.8;
+export const COLUMN_XS = [-33.5, -24.5, -15.5, -6.5, 6.5, 15.5, 24.5, 33.5];
+export const COLUMN_ZS = [-13.5, -4.5, 4.5, 13.5];
+export const COLUMNS = COLUMN_XS.flatMap((x) => COLUMN_ZS.map((z) => ({ x, z })));
+/** Larger ground-floor piers in front of the lobby glass (outside it), between z 13.1 and 15. */
+export const FRONT_PIERS = [-24.5, -15.5, -6.5, 6.5, 15.5, 24.5].map((x) => ({ x, z: 14.05, w: 1.9, d: 1.9 }));
+
+/** Ground floor: lobby floor at 0.6 m on a plinth that ends at z 20, with steps down to the plaza between |x| 5.6. */
+export const LOBBY = { floor: 0.6, ceiling: 7.1, glassZ: 13.6, x: 33.6, backZ: -7 };
+export const PLINTH = { frontZ: 20, stepsEndZ: 26, stepsHalfX: 5.6 };
+/** The opening cut into the lobby glass for the sliding entrance doors. */
+export const DOOR = { x: 2.8, top: 3.1, z0: 13.3, z1: 13.9 };
+export const ELEVATOR = { x0: -2, x1: 5.1, z: -7 };
+
+/** Walking surface height at a point outside the tower floors: plinth, steps, or street. */
+export function groundY(x: number, z: number): number {
+  if (Math.abs(x) <= PLATE.x && z <= PLINTH.frontZ) return LOBBY.floor;
+  if (Math.abs(x) <= PLINTH.stepsHalfX && z < PLINTH.stepsEndZ) return (LOBBY.floor * (PLINTH.stepsEndZ - z)) / (PLINTH.stepsEndZ - PLINTH.frontZ);
+  return 0;
+}
+
 export type FloorProgram = 'open' | 'offices' | 'meeting';
 export const programOf = (i: number): FloorProgram => (['open', 'offices', 'meeting'] as const)[i % 3]!;
 
@@ -51,19 +73,27 @@ export const PROGRAM_COPY: Record<FloorProgram, { title: string; text: string; h
 export type Cutaway = { uCutMin: { value: number }; uCutMax: { value: number } };
 export const createCutaway = (): Cutaway => ({ uCutMin: { value: -1 }, uCutMax: { value: -1 } });
 
-/** Discards facade fragments inside a world-space height band, opening one floor to view. */
-function applyCutaway(mat: Material, cut: Cutaway) {
+const DOOR_HOLE = `if (vWorld.x > ${-DOOR.x.toFixed(2)} && vWorld.x < ${DOOR.x.toFixed(2)} && vWorld.y < ${DOOR.top.toFixed(2)} && vWorld.z > ${DOOR.z0.toFixed(2)} && vWorld.z < ${DOOR.z1.toFixed(2)}) discard;`;
+
+/**
+ * Cuts the entrance opening out of the lobby glass, and (for facade materials) discards fragments
+ * inside a world-space height band, opening one floor to view.
+ */
+function applyBuildingShader(mat: Material, cut: Cutaway | null) {
   mat.onBeforeCompile = (shader) => {
-    shader.uniforms.uCutMin = cut.uCutMin;
-    shader.uniforms.uCutMax = cut.uCutMax;
+    if (cut) {
+      shader.uniforms.uCutMin = cut.uCutMin;
+      shader.uniforms.uCutMax = cut.uCutMax;
+    }
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vCutY;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCutY = (modelMatrix * vec4(transformed, 1.0)).y;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWorld;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    const band = cut ? '\n  if (vWorld.y > uCutMin && vWorld.y < uCutMax) discard;' : '';
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vCutY;\nuniform float uCutMin;\nuniform float uCutMax;')
-      .replace('void main() {', 'void main() {\n  if (vCutY > uCutMin && vCutY < uCutMax) discard;');
+      .replace('#include <common>', `#include <common>\nvarying vec3 vWorld;${cut ? '\nuniform float uCutMin;\nuniform float uCutMax;' : ''}`)
+      .replace('void main() {', `void main() {\n  ${DOOR_HOLE}${band}`);
   };
-  mat.customProgramCacheKey = () => 'spacehub-cutaway';
+  mat.customProgramCacheKey = () => (cut ? 'spacehub-cutaway' : 'spacehub-door');
 }
 
 export type BuildingParts = {
@@ -113,13 +143,11 @@ export function prepareBuilding(scene: Object3D, cut: Cutaway, clip: Plane[]): B
           m.opacity = 0.2;
           m.depthWrite = false;
           m.envMapIntensity = 2.2;
-          applyCutaway(m, cut);
           break;
         case 'Aluminum facade':
           m.color = new Color('#8d96a3');
           m.metalness = 0.8;
           m.roughness = 0.35;
-          applyCutaway(m, cut);
           break;
         case 'Floor levels':
           m.color = new Color('#6d655c');
@@ -136,6 +164,7 @@ export function prepareBuilding(scene: Object3D, cut: Cutaway, clip: Plane[]): B
           m.depthWrite = false;
           break;
       }
+      applyBuildingShader(m, /facade/i.test(src.name) ? cut : null);
       mat = m;
       restyled.set(src.name, m);
     }

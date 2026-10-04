@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { ArrowRight, Box, Footprints, Hand, LogOut, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowRight, ArrowUpDown, Box, DoorOpen, Footprints, Hand, LogOut, Maximize2, Minimize2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -26,27 +26,28 @@ export function BuildingShowcase({ className }: { className?: string }) {
   const [selected, setSelected] = useState<number | null>(null);
   const [walking, setWalking] = useState(false);
   const [elevatorTrips, setElevatorTrips] = useState(0);
+  const [atElevator, setAtElevator] = useState(false);
   const onReady = useCallback(() => setReady(true), []);
+  const onElevator = useCallback((at: boolean) => setAtElevator(at), []);
   const { isFull, toggle, supported } = useFullscreen(stage);
   if (capable && near && !mounted) setMounted(true);
 
   const choose = useCallback(
     (i: number | null) => {
-      if (walking && i !== null) {
+      if (walking) {
         if (i !== selected) {
           setSelected(i);
           setElevatorTrips((t) => t + 1);
         }
         return;
       }
-      if (i === null) setWalking(false);
       setSelected(i === selected ? null : i);
     },
     [walking, selected],
   );
 
   useEffect(() => {
-    if (selected === null || isFull) return;
+    if ((selected === null && !walking) || isFull) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (walking) setWalking(false);
@@ -93,7 +94,7 @@ export function BuildingShowcase({ className }: { className?: string }) {
           className={clsx('absolute inset-0 transition-opacity duration-(--dur-reveal) ease-(--ease-out)', ready ? 'opacity-100' : 'opacity-0')}
           aria-hidden="true"
         >
-          <BuildingScene active={near} selected={selected} walking={walking} onSelect={choose} onReady={onReady} />
+          <BuildingScene active={near} selected={selected} walking={walking} onSelect={choose} onReady={onReady} onElevator={onElevator} />
         </div>
       )}
 
@@ -111,7 +112,7 @@ export function BuildingShowcase({ className }: { className?: string }) {
           {isFull ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
         </button>
       )}
-      {capable && ready && selected === null && (
+      {capable && ready && selected === null && !walking && (
         <span className={clsx(chip, 'pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-2xs text-white/90 sm:text-xs')}>
           <Hand className="h-3.5 w-3.5" aria-hidden="true" />
           גררו לסובב · בחרו קומה
@@ -120,28 +121,91 @@ export function BuildingShowcase({ className }: { className?: string }) {
 
       <nav
         aria-label="בחירת קומה"
-        className="absolute right-3 top-1/2 hidden -translate-y-1/2 flex-col gap-1 rounded-2xl bg-black/55 p-1.5 backdrop-blur sm:flex"
+        className="absolute right-3 top-1/2 hidden max-h-[calc(100%-6rem)] -translate-y-1/2 grid-cols-2 gap-1 overflow-y-auto rounded-2xl bg-black/55 p-1.5 backdrop-blur [scrollbar-width:none] sm:grid"
       >
-        <span className="pb-0.5 text-center text-3xs font-semibold text-white/60">קומה</span>
-        {FLOORS_TOP_DOWN.map((i) => floorButton(i, 'h-5 w-8 text-2xs'))}
+        <span className="col-span-2 pb-0.5 text-center text-3xs font-semibold text-white/60">קומה</span>
+        {FLOORS_TOP_DOWN.map((i) => floorButton(i, 'h-5 w-7 text-3xs'))}
         <button
           type="button"
           onClick={() => choose(null)}
           aria-pressed={selected === null}
           className={clsx(
-            'mt-1 flex h-7 w-8 items-center justify-center rounded-md transition-colors',
+            'col-span-2 mt-0.5 flex h-6 items-center justify-center gap-1 rounded-md text-3xs font-semibold transition-colors',
             selected === null ? 'bg-accent text-accent-fg' : 'bg-white/10 text-white/80 hover:bg-white/20',
           )}
-          aria-label="כל הבניין"
-          title="כל הבניין"
+          aria-label={walking ? 'ללובי' : 'כל הבניין'}
+          title={walking ? 'ללובי' : 'כל הבניין'}
         >
-          <Box className="h-3.5 w-3.5" aria-hidden="true" />
+          {walking ? <DoorOpen className="h-3.5 w-3.5" aria-hidden="true" /> : <Box className="h-3.5 w-3.5" aria-hidden="true" />}
+          {walking ? 'לובי' : null}
         </button>
       </nav>
 
       <nav aria-label="בחירת קומה" className="absolute inset-x-0 bottom-0 flex gap-1.5 overflow-x-auto bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-6 [scrollbar-width:none] sm:hidden">
+        {walking && (
+          <button
+            type="button"
+            onClick={() => choose(null)}
+            aria-pressed={selected === null}
+            className={clsx(
+              'flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-semibold',
+              selected === null ? 'bg-accent text-accent-fg' : 'bg-white/10 text-white/80',
+            )}
+          >
+            <DoorOpen className="h-3.5 w-3.5" aria-hidden="true" />
+            לובי
+          </button>
+        )}
         {Array.from({ length: FLOOR_COUNT }, (_, i) => floorButton(i, 'h-8 min-w-8 px-1 text-xs'))}
       </nav>
+
+      {capable && ready && selected === null && !walking && (
+        <button
+          type="button"
+          onClick={() => setWalking(true)}
+          className="absolute bottom-16 left-3 flex items-center gap-1.5 rounded-full bg-accent px-4 py-2.5 text-xs font-semibold text-accent-fg shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.97] sm:bottom-4 sm:left-4 sm:text-sm"
+        >
+          <Footprints className="h-4 w-4" aria-hidden="true" />
+          להיכנס לבניין מהרחוב
+        </button>
+      )}
+
+      {selected === null && walking && (
+        <>
+          <div className={clsx(chip, 'pointer-events-none absolute left-1/2 top-3 flex max-w-[calc(100%-6rem)] -translate-x-1/2 flex-col items-center px-3.5 py-1.5 text-center')}>
+            <span className="text-xs font-semibold sm:text-sm">הרחוב והלובי</span>
+            <span className="flex items-center gap-1 text-2xs text-white/75">
+              <Hand className="h-3 w-3 shrink-0" aria-hidden="true" />
+              <span className="sm:hidden">הקישו על הקרקע ללכת · המעלית בסוף הלובי</span>
+              <span className="hidden sm:inline">חצו במעבר החצייה, היכנסו בדלתות והגיעו למעלית · W A S D או לחיצה</span>
+            </span>
+          </div>
+          {atElevator && (
+            <section
+              aria-live="polite"
+              className="absolute left-1/2 top-1/2 w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-black/80 p-3 text-white shadow-2xl backdrop-blur-md"
+            >
+              <p className="flex items-center justify-center gap-1.5 text-sm font-bold">
+                <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+                המעלית כאן · בחרו קומה
+              </p>
+              <div className="mt-2.5 grid grid-cols-6 gap-1">
+                {Array.from({ length: FLOOR_COUNT }, (_, i) => floorButton(i, 'h-8 text-xs'))}
+              </div>
+            </section>
+          )}
+          <div className="absolute bottom-16 left-3 sm:bottom-4 sm:left-4">
+            <button
+              type="button"
+              onClick={() => setWalking(false)}
+              className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-xs font-semibold text-zinc-950 shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.97]"
+            >
+              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+              חזרה למבט על
+            </button>
+          </div>
+        </>
+      )}
 
       {copy && selected !== null && walking && (
         <>
@@ -163,6 +227,14 @@ export function BuildingShowcase({ className }: { className?: string }) {
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
               לצאת מהקומה
+            </button>
+            <button
+              type="button"
+              onClick={() => choose(null)}
+              className="flex items-center gap-1.5 rounded-full border border-white/25 bg-black/60 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur hover:border-white"
+            >
+              <DoorOpen className="h-3.5 w-3.5" aria-hidden="true" />
+              ירידה ללובי
             </button>
             <Link href={copy.href} className="rounded-full border border-white/25 bg-black/60 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur hover:border-white">
               {copy.cta}

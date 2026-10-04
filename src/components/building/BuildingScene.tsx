@@ -1,439 +1,19 @@
 'use client';
 
 import { Environment, Html, Lightformer, OrbitControls, Stars, useGLTF } from '@react-three/drei';
-import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  CanvasTexture,
-  Color,
-  Euler,
-  type InstancedMesh,
-  type PerspectiveCamera,
-  Matrix4,
-  Plane,
-  PlaneGeometry,
-  type PointLight,
-  Quaternion,
-  RepeatWrapping,
-  SRGBColorSpace,
-  Vector3,
-} from 'three';
+import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { AdditiveBlending, CanvasTexture, Color, type Group, type PerspectiveCamera, type PointLight, SRGBColorSpace, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import {
-  BUILDING_URL,
-  CLEAR_HEIGHT,
-  CORE,
-  FLOOR_COUNT,
-  PLATE,
-  PROGRAM_COPY,
-  ROOF_Y,
-  createCutaway,
-  floorY,
-  prepareBuilding,
-  programOf,
-} from '@/components/three/building-model';
+import { BUILDING_URL, CLEAR_HEIGHT, FLOOR_COUNT, PLATE, PROGRAM_COPY, ROOF_Y, floorY, prepareBuilding, programOf } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
-import { bindLookControls, clamp, fovFor, keyDirection, yawToward, type LookState } from '@/components/three/first-person';
-import { KIT_URL, extractKit, type KitPart } from '@/components/three/kit-model';
-
-/** One scene per page, so the facade cutaway uniforms can live at module scope. */
-const CUT = createCutaway();
-/** Everything above this plane is hidden while a floor is open, turning the tower into a cut-away model. */
-const CLIP = new Plane(new Vector3(0, -1, 0), 1e4);
-const CLIP_PLANES = [CLIP];
-
-type Item = { f: number; x: number; z: number; r?: number; s?: number; sx?: number; sy?: number; sz?: number; y?: number; meet?: boolean };
-type Layout = {
-  desks: Item[];
-  chairs: Item[];
-  monitors: Item[];
-  exec: Item[];
-  glass: Item[];
-  tables: Item[];
-  screens: Item[];
-  sofas: Item[];
-  lounge: Item[];
-  panels: Item[];
-};
-
-const WINGS: [number, number][] = [
-  [-33, -9],
-  [9, 33],
-];
-
-function seededRandom(seed: number): () => number {
-  let s = seed;
-  return () => (s = (s * 16807) % 2147483647) / 2147483647;
-}
-
-/** Illustrative fit-out per floor: open desk rows, glass private offices, or meeting rooms, plus a lounge by the core. */
-function buildLayout(): Layout {
-  const L: Layout = { desks: [], chairs: [], monitors: [], exec: [], glass: [], tables: [], screens: [], sofas: [], lounge: [], panels: [] };
-  const wallH = CLEAR_HEIGHT - 0.1;
-
-  /** Pod of four desks: two back-to-back pairs, chairs facing in. `r` on a chair is the yaw that turns it toward its desk. */
-  const pod = (f: number, px: number, pz: number) => {
-    for (const dx of [-0.66, 0.66]) {
-      for (const s of [1, -1]) {
-        L.desks.push({ f, x: px + dx, z: pz, r: s === 1 ? 0 : Math.PI, s });
-        L.chairs.push({ f, x: px + dx, z: pz + s * 1.05, r: s === 1 ? Math.PI : 0 });
-        L.monitors.push({ f, x: px + dx, z: pz + s * 0.12, s });
-      }
-    }
-  };
-  const podRows = (f: number, x0: number, x1: number, zs: number[]) => {
-    for (let px = x0 + 2.4; px <= x1 - 2.2; px += 4.6) for (const pz of zs) pod(f, px, pz);
-  };
-
-  const glassRoom = (f: number, x: number, w: number, side: number, depth: number, closeEnd: boolean) => {
-    const zFront = side * (14.8 - depth);
-    const zMid = side * (14.8 - depth / 2);
-    L.glass.push({ f, x: x + (w - 1.2) / 2, z: zFront, sx: w - 1.3, sz: 0.06, sy: wallH, y: wallH / 2 });
-    L.glass.push({ f, x: x + w - 0.3, z: zFront, sx: 0.5, sz: 0.06, sy: wallH, y: wallH / 2 });
-    L.glass.push({ f, x, z: zMid, sx: 0.06, sz: depth, sy: wallH, y: wallH / 2 });
-    if (closeEnd) L.glass.push({ f, x: x + w, z: zMid, sx: 0.06, sz: depth, sy: wallH, y: wallH / 2 });
-  };
-
-  for (let f = 0; f < FLOOR_COUNT; f++) {
-    const program = programOf(f);
-    for (const [wx0, wx1] of WINGS) {
-      if (program === 'open') {
-        podRows(f, wx0, wx1, [-10.5, -4.5, 1.5, 7.5, 12]);
-      } else if (program === 'offices') {
-        for (let x = wx0; x + 6 <= wx1 + 0.01; x += 6) {
-          for (const side of [-1, 1]) {
-            glassRoom(f, x, 6, side, 5, x + 12 > wx1 + 0.01);
-            L.exec.push({ f, x: x + 3, z: side * 12.3, r: side === -1 ? 0 : Math.PI });
-            L.monitors.push({ f, x: x + 3, z: side * 12.75, s: side });
-          }
-        }
-        podRows(f, wx0, wx1, [-4.2, 1.2, 5.8]);
-      } else {
-        for (let x = wx0; x + 8 <= wx1 + 0.01; x += 8) {
-          for (const side of [-1, 1]) {
-            glassRoom(f, x, 8, side, 6.5, x + 16 > wx1 + 0.01);
-            const cz = side * 11.6;
-            L.tables.push({ f, x: x + 4, z: cz });
-            for (let k = 0; k < 6; k++) {
-              L.chairs.push({ f, x: x + 4 + (k - 2.5) * 0.78, z: cz - 1.2, r: 0, meet: true });
-              L.chairs.push({ f, x: x + 4 + (k - 2.5) * 0.78, z: cz + 1.2, r: Math.PI, meet: true });
-            }
-            L.screens.push({ f, x: x + 0.15, z: cz });
-          }
-        }
-        podRows(f, wx0, wx1, [-2.4, 3]);
-      }
-    }
-    for (const x of [-4.2, 0, 4.2]) L.sofas.push({ f, x, z: 9.2 });
-    for (const x of [-3, 3]) L.sofas.push({ f, x, z: 12.2, r: Math.PI });
-    L.lounge.push({ f, x: 0, z: 10.7 });
-
-    for (let x = -33; x <= 33; x += 3) {
-      for (let z = -13.5; z <= 13.5; z += 3) {
-        if (x > CORE.x0 - 0.3 && x < CORE.x1 + 0.3 && z > CORE.z0 - 0.2 && z < CORE.z1 + 0.2) continue;
-        L.panels.push({ f, x, z, s: x < 0 ? 0 : 1 });
-      }
-    }
-  }
-  return L;
-}
-
-const _m = new Matrix4();
-const _q = new Quaternion();
-const _e = new Euler();
-const _p = new Vector3();
-const _s = new Vector3();
-
-function composeItem(it: Item, y: number, size: readonly [number, number, number]): Matrix4 {
-  _p.set(it.x, floorY(it.f) + (it.y ?? y), it.z);
-  _q.setFromEuler(_e.set(0, it.r ?? 0, 0));
-  _s.set(it.sx ?? size[0], it.sy ?? size[1], it.sz ?? size[2]);
-  return _m.compose(_p, _q, _s);
-}
-
-/** Box instances for every item, optionally skipping one floor (where detailed models take over). */
-function Boxes({
-  items,
-  size,
-  y,
-  exclude = null,
-  offset,
-  children,
-}: {
-  items: Item[];
-  size: readonly [number, number, number];
-  y: number;
-  exclude?: number | null;
-  offset?: (it: Item) => Item;
-  children: ReactNode;
-}) {
-  const ref = useRef<InstancedMesh>(null);
-  const list = useMemo(() => (exclude === null ? items : items.filter((i) => i.f !== exclude)), [items, exclude]);
-  useLayoutEffect(() => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    list.forEach((it, i) => mesh.setMatrixAt(i, composeItem(offset ? offset(it) : it, y, size)));
-    mesh.count = list.length;
-    mesh.instanceMatrix.needsUpdate = true;
-  }, [list, y, size, offset]);
-  return (
-    <instancedMesh ref={ref} args={[undefined, undefined, Math.max(1, items.length)]} frustumCulled={false}>
-      <boxGeometry args={[1, 1, 1]} />
-      {children}
-    </instancedMesh>
-  );
-}
-
-const DESK_TOP = [1.2, 0.05, 0.6] as const;
-const CHAIR = [0.5, 0.95, 0.5] as const;
-const MONITOR = [0.56, 0.32, 0.03] as const;
-const TABLE = [4.4, 0.06, 1.4] as const;
-const SCREEN = [0.05, 0.9, 1.6] as const;
-const SOFA = [2.2, 0.75, 0.9] as const;
-const MONITOR_GLOW = new Color('#6f8ff0').multiplyScalar(0.75);
-const MONITOR_BACK = [0.6, 0.36, 0.025] as const;
-const MONITOR_NECK = [0.05, 0.1, 0.05] as const;
-const MONITOR_FOOT = [0.22, 0.012, 0.16] as const;
-/** Monitor items carry `s`, the side they face; frame and stand sit just behind the screen. */
-const behindScreen = (by: number) => (it: Item): Item => ({ ...it, z: it.z - (it.s ?? 1) * by });
-const BEHIND_FRAME = behindScreen(0.02);
-const BEHIND_STAND = behindScreen(0.05);
-const SCREEN_GLOW = new Color('#6d5cff').multiplyScalar(1.1);
-const LOUNGE_TABLE = [1.6, 0.06, 1.6] as const;
-const NEIGHBOUR_AT: [number, number, number] = [84, 0, 14];
-const ONE = [1, 1, 1] as const;
-const deskTopOffset = (it: Item): Item => ({ ...it, z: it.z + (it.s ?? 1) * 0.3 });
-
-/** Model instances (one InstancedMesh per material) at the given items. */
-function ModelInstances({ geometry, material, items }: { geometry: import('three').BufferGeometry; material: import('three').Material; items: Item[] }) {
-  const ref = useRef<InstancedMesh>(null);
-  useLayoutEffect(() => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    items.forEach((it, i) => mesh.setMatrixAt(i, composeItem(it, 0, ONE)));
-    mesh.count = items.length;
-    mesh.instanceMatrix.needsUpdate = true;
-  }, [items]);
-  return <instancedMesh ref={ref} args={[geometry, material, Math.max(1, items.length)]} frustumCulled={false} />;
-}
-
-const WARM = new Color('#ffe2b8').multiplyScalar(1.35);
-const WAVE_STEP = 0.085;
-const WAVE_FADE = 0.5;
-
-/** Ceiling light strips on every floor; they switch on floor by floor, then a zone occasionally goes dark or lights up. */
-function CeilingLights({ panels, live, selected }: { panels: Item[]; live: boolean; selected: number | null }) {
-  const ref = useRef<InstancedMesh>(null);
-  const geometry = useMemo(() => new PlaneGeometry(1.6, 0.35).rotateX(Math.PI / 2), []);
-  useEffect(() => () => geometry.dispose(), [geometry]);
-  const zones = FLOOR_COUNT * 2;
-  const state = useRef({
-    start: -1,
-    cur: new Float32Array(zones),
-    target: new Float32Array(zones),
-    floor: new Float32Array(FLOOR_COUNT).fill(1),
-    nextToggle: 4,
-    settled: false,
-  });
-
-  useLayoutEffect(() => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    const rnd = seededRandom(11);
-    for (let z = 0; z < zones; z++) state.current.target[z] = rnd() < 0.14 ? 0.05 : 1;
-    panels.forEach((it, i) => {
-      mesh.setMatrixAt(i, composeItem(it, CLEAR_HEIGHT - 0.04, ONE));
-      mesh.setColorAt(i, new Color(0, 0, 0));
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  }, [panels, zones]);
-
-  useFrame(({ clock }, delta) => {
-    const mesh = ref.current;
-    const st = state.current;
-    if (!mesh?.instanceColor) return;
-    if (st.start < 0) st.start = clock.elapsedTime;
-    const t = clock.elapsedTime - st.start;
-    const waving = t < FLOOR_COUNT * WAVE_STEP + WAVE_FADE + 0.1;
-
-    if (live && t > st.nextToggle) {
-      st.nextToggle = t + 2.5 + Math.random() * 3;
-      const z = Math.floor(Math.random() * zones);
-      st.target[z] = st.target[z]! > 0.5 ? 0.05 : 1;
-      st.settled = false;
-    }
-    let moving = false;
-    const k = Math.min(1, delta * 3);
-    for (let z = 0; z < zones; z++) {
-      const d = st.target[z]! - st.cur[z]!;
-      if (Math.abs(d) > 0.002) {
-        st.cur[z]! += d * k;
-        moving = true;
-      } else st.cur[z] = st.target[z]!;
-    }
-    for (let f = 0; f < FLOOR_COUNT; f++) {
-      const goal = selected === null || selected === f ? 1 : 0.28;
-      const d = goal - st.floor[f]!;
-      if (Math.abs(d) > 0.002) {
-        st.floor[f]! += d * k;
-        moving = true;
-      } else st.floor[f] = goal;
-    }
-    if (!waving && !moving && st.settled) return;
-    st.settled = !waving && !moving;
-
-    const arr = mesh.instanceColor.array as Float32Array;
-    for (let i = 0; i < panels.length; i++) {
-      const it = panels[i]!;
-      const wave = Math.min(1, Math.max(0, (t - it.f * WAVE_STEP) / WAVE_FADE));
-      const zone = it.f === selected ? 1.25 : st.cur[it.f * 2 + (it.s ?? 0)]!;
-      const lvl = wave * zone * st.floor[it.f]!;
-      arr[i * 3] = WARM.r * lvl;
-      arr[i * 3 + 1] = WARM.g * lvl;
-      arr[i * 3 + 2] = WARM.b * lvl;
-    }
-    mesh.instanceColor.needsUpdate = true;
-  });
-
-  return (
-    <instancedMesh ref={ref} args={[geometry, undefined, panels.length]} frustumCulled={false}>
-      <meshBasicMaterial toneMapped={false} clippingPlanes={CLIP_PLANES} />
-    </instancedMesh>
-  );
-}
-
-function windowTexture(): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#05070b';
-  ctx.fillRect(0, 0, 64, 128);
-  const rnd = seededRandom(5);
-  for (let y = 0; y < 16; y++) {
-    for (let x = 0; x < 8; x++) {
-      const v = rnd();
-      ctx.fillStyle = v < 0.42 ? '#0b0e14' : v < 0.85 ? '#ffd9a0' : '#bcd4ff';
-      ctx.globalAlpha = v < 0.42 ? 1 : 0.55 + rnd() * 0.45;
-      ctx.fillRect(x * 8 + 1.5, y * 8 + 2, 5, 4);
-    }
-  }
-  const tex = new CanvasTexture(canvas);
-  tex.colorSpace = SRGBColorSpace;
-  tex.wrapS = tex.wrapT = RepeatWrapping;
-  return tex;
-}
-
-const ROAD_X_Z = 52;
-const ROAD_Z_X = -64;
-
-/** Low city blocks around the tower, kept clear of the plaza and the two roads. */
-function City() {
-  const ref = useRef<InstancedMesh>(null);
-  const tex = useMemo(() => windowTexture(), []);
-  useEffect(() => () => tex.dispose(), [tex]);
-  const blocks = useMemo(() => {
-    const rnd = seededRandom(23);
-    const out: Matrix4[] = [];
-    let guard = 0;
-    while (out.length < 170 && guard++ < 4000) {
-      const a = rnd() * Math.PI * 2;
-      const r = 80 + rnd() * 360;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r;
-      if (Math.abs(z - ROAD_X_Z) < 14 || Math.abs(x - ROAD_Z_X) < 14) continue;
-      if (Math.abs(x) < 50 && z > -30 && z < 40) continue;
-      if (Math.abs(x - NEIGHBOUR_AT[0]) < 34 && Math.abs(z - NEIGHBOUR_AT[2]) < 30) continue;
-      const w = 14 + rnd() * 22;
-      const d = 14 + rnd() * 22;
-      const h = 8 + rnd() * rnd() * 70;
-      out.push(new Matrix4().compose(new Vector3(x, h / 2, z), new Quaternion(), new Vector3(w, h, d)));
-    }
-    return out;
-  }, []);
-  useLayoutEffect(() => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    blocks.forEach((m, i) => mesh.setMatrixAt(i, m));
-    mesh.instanceMatrix.needsUpdate = true;
-  }, [blocks]);
-  return (
-    <instancedMesh ref={ref} args={[undefined, undefined, blocks.length]}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color="#0e1118" map={tex} emissiveMap={tex} emissive="#ffffff" emissiveIntensity={0.9} roughness={0.85} />
-    </instancedMesh>
-  );
-}
-
-const CARS_PER_LANE = 14;
-const LANES = [
-  { axis: 'x' as const, at: ROAD_X_Z - 2.2, dir: 1, color: new Color('#ff4d4d').multiplyScalar(1.6) },
-  { axis: 'x' as const, at: ROAD_X_Z + 2.2, dir: -1, color: new Color('#fff4e0').multiplyScalar(1.8) },
-  { axis: 'z' as const, at: ROAD_Z_X - 2.2, dir: 1, color: new Color('#fff4e0').multiplyScalar(1.8) },
-  { axis: 'z' as const, at: ROAD_Z_X + 2.2, dir: -1, color: new Color('#ff4d4d').multiplyScalar(1.6) },
-];
-const ROAD_HALF = 420;
-
-function Traffic() {
-  const ref = useRef<InstancedMesh>(null);
-  const cars = useMemo(() => {
-    const rnd = seededRandom(31);
-    return LANES.flatMap((lane, li) =>
-      Array.from({ length: CARS_PER_LANE }, () => ({ li, pos: (rnd() * 2 - 1) * ROAD_HALF, speed: 11 + rnd() * 7 })),
-    );
-  }, []);
-  useLayoutEffect(() => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    cars.forEach((c, i) => mesh.setColorAt(i, LANES[c.li]!.color));
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  }, [cars]);
-  useFrame((_, delta) => {
-    const mesh = ref.current;
-    if (!mesh) return;
-    cars.forEach((c, i) => {
-      const lane = LANES[c.li]!;
-      c.pos += lane.dir * c.speed * Math.min(delta, 0.1);
-      if (c.pos > ROAD_HALF) c.pos -= ROAD_HALF * 2;
-      if (c.pos < -ROAD_HALF) c.pos += ROAD_HALF * 2;
-      if (lane.axis === 'x') {
-        _p.set(c.pos, 0.6, lane.at);
-        _s.set(3.6, 0.45, 1.5);
-      } else {
-        _p.set(lane.at, 0.6, c.pos);
-        _s.set(1.5, 0.45, 3.6);
-      }
-      mesh.setMatrixAt(i, _m.compose(_p, _q.identity(), _s));
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-  });
-  return (
-    <instancedMesh ref={ref} args={[undefined, undefined, cars.length]} frustumCulled={false}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshBasicMaterial toneMapped={false} />
-    </instancedMesh>
-  );
-}
-
-function Ground() {
-  return (
-    <group>
-      <mesh rotation-x={-Math.PI / 2} position={[0, -0.02, 0]}>
-        <planeGeometry args={[1400, 1400]} />
-        <meshStandardMaterial color="#0a0c11" roughness={1} />
-      </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0.01, ROAD_X_Z]}>
-        <planeGeometry args={[ROAD_HALF * 2, 11]} />
-        <meshStandardMaterial color="#14161c" roughness={0.6} metalness={0.2} />
-      </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[ROAD_Z_X, 0.012, 0]}>
-        <planeGeometry args={[11, ROAD_HALF * 2]} />
-        <meshStandardMaterial color="#14161c" roughness={0.6} metalness={0.2} />
-      </mesh>
-    </group>
-  );
-}
+import { KIT_URL, extractKit } from '@/components/three/kit-model';
+import { City, NEIGHBOUR_AT, TRAFFIC_A_URL, TRAFFIC_B_URL } from './city';
+import { Entrance, HERO_CAR_URL } from './entrance';
+import { Furnishing, Interior } from './interior';
+import { buildLayout, type Layout } from './layout';
+import { CLIP, CLIP_PLANES, CUT, WALK } from './shared';
+import { WalkRig } from './walk';
 
 const CROWN = new Color('#a78bfa').multiplyScalar(2.2);
 
@@ -454,10 +34,19 @@ function drawSign(): CanvasTexture {
   return tex;
 }
 
-/** Violet LED crown, corner strips and the rooftop sign. */
+/** Violet LED crown, corner strips, the rooftop sign and two sweeping searchlights. */
 function Crown() {
   const sign = useMemo(() => drawSign(), []);
   useEffect(() => () => sign.dispose(), [sign]);
+  const beams = useRef<Group>(null);
+  useFrame(({ clock }) => {
+    const g = beams.current;
+    if (!g) return;
+    g.children.forEach((b, i) => {
+      b.rotation.z = Math.sin(clock.elapsedTime * 0.35 + i * 2.1) * 0.45;
+      b.rotation.x = Math.cos(clock.elapsedTime * 0.27 + i * 1.3) * 0.3;
+    });
+  });
   const x = PLATE.x + 0.5;
   const z = PLATE.z + 0.5;
   const h = ROOF_Y - 7;
@@ -484,6 +73,16 @@ function Crown() {
         <planeGeometry args={[26, 4.06]} />
         <meshBasicMaterial map={sign} transparent toneMapped={false} color="#f5f0ff" clippingPlanes={CLIP_PLANES} />
       </mesh>
+      <group ref={beams}>
+        {[-24, 24].map((bx) => (
+          <group key={bx} position={[bx, ROOF_Y + 0.5, 0]}>
+            <mesh position={[0, 90, 0]}>
+              <cylinderGeometry args={[6, 0.6, 180, 24, 1, true]} />
+              <meshBasicMaterial color="#b9a8ff" transparent opacity={0.07} blending={AdditiveBlending} depthWrite={false} side={2} fog={false} clippingPlanes={CLIP_PLANES} />
+            </mesh>
+          </group>
+        ))}
+      </group>
     </group>
   );
 }
@@ -607,11 +206,12 @@ function CutawayAnimator({ selected, walking }: { selected: number | null; walki
     const k = Math.min(1, delta * 4);
     if (wasWalking.current && !walking && selected !== null) CLIP.constant = floorY(selected) + CLEAR_HEIGHT - 0.35;
     wasWalking.current = walking;
+    const clipped = selected !== null && !walking;
     const open = selected !== null && !(walking && WALK.inside);
-    const clipGoal = open && selected !== null ? floorY(selected) + CLEAR_HEIGHT - 0.35 : ROOF_Y + 12;
+    const clipGoal = clipped && selected !== null ? floorY(selected) + CLEAR_HEIGHT - 0.35 : ROOF_Y + 12;
     if (CLIP.constant > ROOF_Y + 12) CLIP.constant = ROOF_Y + 12;
     CLIP.constant += (clipGoal - CLIP.constant) * Math.min(1, delta * 2.6);
-    if (!open && CLIP.constant > ROOF_Y + 11.9) CLIP.constant = 1e4;
+    if (!clipped && CLIP.constant > ROOF_Y + 11.9) CLIP.constant = 1e4;
     if (!open || selected === null) {
       CUT.uCutMax.value += (CUT.uCutMin.value - CUT.uCutMax.value) * k;
       return;
@@ -645,6 +245,9 @@ function goalFor(selected: number | null, aspect: number, pos: Vector3, target: 
     pos.set(30, y + 46, 62);
   }
 }
+
+const ORBIT_FOV = 32;
+const ORBIT_NEAR = 0.5;
 
 /** Orbit camera that flies between the overview and a floor; idles with a slow turn around the tower. */
 function CameraRig({ selected, walking }: { selected: number | null; walking: boolean }) {
@@ -711,248 +314,6 @@ function CameraRig({ selected, walking }: { selected: number | null; walking: bo
   );
 }
 
-const ORBIT_FOV = 32;
-const ORBIT_NEAR = 0.5;
-const EYE = 1.6;
-const WALK_SPEED = 3;
-const BODY = 0.3;
-/** The walker glides in through the plaza facade along the clear aisle between the lounge and the east wing. */
-const ENTRY_X = 6.5;
-const SPAWN_Z = 6.2;
-const APPROACH_Z = PLATE.z + 9;
-const ARRIVAL_LOOK = { x: 20, z: -3 };
-/** Read by CutawayAnimator: true once the walking camera has passed the facade. */
-const WALK = { inside: false };
-
-type Rect = { x0: number; x1: number; z0: number; z1: number };
-const rectAt = (x: number, z: number, w: number, d: number): Rect => ({ x0: x - w / 2, x1: x + w / 2, z0: z - d / 2, z1: z + d / 2 });
-
-function obstaclesFor(layout: Layout, f: number): Rect[] {
-  const on = (list: Item[]) => list.filter((it) => it.f === f);
-  const rects: Rect[] = [{ ...CORE }];
-  for (const g of on(layout.glass)) rects.push(rectAt(g.x, g.z, g.sx ?? 0.06, g.sz ?? 0.06));
-  for (const d of on(layout.desks).map(deskTopOffset)) rects.push(rectAt(d.x, d.z, DESK_TOP[0], DESK_TOP[2]));
-  for (const t of on(layout.tables)) rects.push(rectAt(t.x, t.z, TABLE[0], TABLE[2]));
-  for (const so of on(layout.sofas)) rects.push(rectAt(so.x, so.z, SOFA[0], SOFA[2]));
-  for (const l of on(layout.lounge)) rects.push(rectAt(l.x, l.z, LOUNGE_TABLE[0], LOUNGE_TABLE[2]));
-  for (const e of on(layout.exec)) rects.push(rectAt(e.x, e.z, 1.4, 1.4));
-  return rects;
-}
-
-/** Keeps a point inside the facade and out of walls and furniture, pushing it out along the shortest axis. */
-function keepWalkable(p: Vector3, rects: Rect[]): Vector3 {
-  p.x = clamp(p.x, -PLATE.x + 0.8, PLATE.x - 0.8);
-  p.z = clamp(p.z, -PLATE.z + 0.8, PLATE.z - 0.8);
-  for (const r of rects) {
-    const x0 = r.x0 - BODY;
-    const x1 = r.x1 + BODY;
-    const z0 = r.z0 - BODY;
-    const z1 = r.z1 + BODY;
-    if (p.x <= x0 || p.x >= x1 || p.z <= z0 || p.z >= z1) continue;
-    const dl = p.x - x0;
-    const dr = x1 - p.x;
-    const dn = p.z - z0;
-    const df = z1 - p.z;
-    const m = Math.min(dl, dr, dn, df);
-    if (m === dl) p.x = x0;
-    else if (m === dr) p.x = x1;
-    else if (m === dn) p.z = z0;
-    else p.z = z1;
-  }
-  return p;
-}
-
-function setTouchAction(el: HTMLElement, value: string) {
-  el.style.touchAction = value;
-}
-
-type WalkNav = LookState & { pos: Vector3; path: Vector3[]; snap: boolean; flying: boolean; floor: number };
-
-/**
- * First-person walk on one floor: glides in through the facade, then drag to look,
- * click the floor or use WASD/arrows to move. Switching floors arrives straight at the lounge.
- */
-function WalkRig({ floor, layout }: { floor: number; layout: Layout }) {
-  const el = useThree((st) => st.gl.domElement);
-  const rects = useMemo(() => obstaclesFor(layout, floor), [layout, floor]);
-  const nav = useRef<WalkNav>({
-    pos: new Vector3(),
-    path: [],
-    yaw: 0,
-    pitch: 0,
-    yawGoal: null,
-    keys: new Set(),
-    inside: true,
-    snap: false,
-    flying: false,
-    floor: -1,
-  });
-  const v = useMemo(() => ({ dir: new Vector3(), spawn: new Vector3(), look: new Vector3(), before: new Vector3() }), []);
-
-  useEffect(() => bindLookControls(el, nav), [el]);
-  useEffect(() => {
-    const prev = el.style.touchAction;
-    setTouchAction(el, 'none');
-    return () => setTouchAction(el, prev);
-  }, [el]);
-  useEffect(
-    () => () => {
-      WALK.inside = false;
-    },
-    [],
-  );
-
-  useFrame((state, rawDelta) => {
-    const delta = Math.min(rawDelta, 0.1);
-    const n = nav.current;
-    const cam = state.camera as PerspectiveCamera;
-    const eyeY = floorY(floor) + EYE;
-    const { dir, spawn, look, before } = v;
-    spawn.set(ENTRY_X, eyeY, SPAWN_Z);
-    look.set(ARRIVAL_LOOK.x, eyeY - 0.5, ARRIVAL_LOOK.z);
-
-    if (n.floor !== floor) {
-      const first = n.floor === -1;
-      n.floor = floor;
-      n.keys.clear();
-      if (first) {
-        n.pos.copy(cam.position);
-        cam.getWorldDirection(dir);
-        n.yaw = Math.atan2(-dir.x, -dir.z);
-        n.pitch = Math.asin(clamp(dir.y, -1, 1));
-        n.path = [new Vector3(ENTRY_X, eyeY + 1.2, APPROACH_Z), spawn.clone()];
-        n.flying = true;
-      } else {
-        n.pos.copy(spawn);
-        n.path = [];
-        n.snap = true;
-        n.flying = false;
-        n.yaw = yawToward(spawn, look);
-        n.pitch = -0.08;
-      }
-    }
-
-    const p = n.pos;
-    if (n.keys.size > 0 && !n.flying) {
-      n.path = [];
-      if (keyDirection(n.keys, n.yaw, dir)) p.addScaledVector(dir, WALK_SPEED * delta);
-      keepWalkable(p, rects);
-    } else if (n.path.length > 0) {
-      const target = n.path[0]!;
-      dir.subVectors(target, p);
-      const dist = dir.length();
-      const speed = n.flying ? Math.max(WALK_SPEED * 1.5, dist * 1.8) : WALK_SPEED;
-      const step = speed * delta;
-      const passThrough = n.flying && n.path.length > 1 ? 3 : 0;
-      if (dist <= Math.max(step, passThrough)) {
-        if (n.path.length === 1) p.copy(target);
-        n.path.shift();
-        if (n.path.length === 0) n.flying = false;
-      } else {
-        before.copy(p);
-        p.addScaledVector(dir, step / dist);
-        if (!n.flying) {
-          keepWalkable(p, rects);
-          if (before.distanceTo(p) < step * 0.25) n.path = [];
-        }
-      }
-    }
-
-    if (n.flying) {
-      const goalYaw = yawToward(p, look);
-      const goalPitch = Math.atan2(look.y - p.y, Math.hypot(look.x - p.x, look.z - p.z));
-      const t = Math.min(1, delta * 3);
-      n.yaw += Math.atan2(Math.sin(goalYaw - n.yaw), Math.cos(goalYaw - n.yaw)) * t;
-      n.pitch += (goalPitch - n.pitch) * t;
-    }
-    WALK.inside = p.z < PLATE.z - 0.3 && Math.abs(p.y - eyeY) < 2;
-
-    const fov = fovFor(state.size.width / state.size.height);
-    if (Math.abs(cam.fov - fov) > 0.05 || cam.near !== 0.1) {
-      cam.fov += (fov - cam.fov) * Math.min(1, delta * 3);
-      cam.near = 0.1;
-      cam.updateProjectionMatrix();
-    }
-    cam.rotation.order = 'YXZ';
-    if (n.snap) {
-      cam.position.copy(p);
-      n.snap = false;
-    } else {
-      cam.position.lerp(p, 1 - Math.exp(-delta * (n.flying ? 20 : 8)));
-    }
-    cam.rotation.set(n.pitch, n.yaw, 0);
-  });
-
-  const onFloorClick = (e: ThreeEvent<MouseEvent>) => {
-    const n = nav.current;
-    if (n.flying || e.delta > 6) return;
-    e.stopPropagation();
-    n.keys.clear();
-    const target = keepWalkable(e.point.clone(), rects);
-    target.y = floorY(floor) + EYE;
-    n.path = [target];
-  };
-
-  return (
-    <mesh rotation-x={-Math.PI / 2} position={[0, floorY(floor) + 0.02, 0]} onClick={onFloorClick}>
-      <planeGeometry args={[PLATE.x * 2, PLATE.z * 2]} />
-      <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
-    </mesh>
-  );
-}
-
-/** Model yaw that makes the kit chairs face +Z (their seat front), measured on the asset. */
-const KIT_CHAIR_YAW = 0;
-
-function KitInstances({ parts, items }: { parts: KitPart[] | undefined; items: Item[] }) {
-  if (!parts || items.length === 0) return null;
-  return (
-    <>
-      {parts.map((p, i) => (
-        <ModelInstances key={i} geometry={p.geometry} material={p.material} items={items} />
-      ))}
-    </>
-  );
-}
-
-/** Real furniture from the kit, only on the open floor; every other floor keeps light box stand-ins. */
-function Furnishing({ selected, layout }: { selected: number; layout: Layout }) {
-  const { scene } = useGLTF(KIT_URL, DRACO_PATH);
-  const kit = useMemo(() => extractKit(scene), [scene]);
-  const set = useMemo(() => {
-    const on = (list: Item[]) => list.filter((it) => it.f === selected);
-    const turn = (it: Item, by: number): Item => ({ ...it, r: (it.r ?? 0) + by });
-    const chairs = on(layout.chairs);
-    const deskChairs = chairs.filter((c) => !c.meet);
-    const exec = on(layout.exec);
-    return {
-      desks: on(layout.desks).map(deskTopOffset),
-      chairsA: deskChairs.filter((_, i) => i % 2 === 0).map((c) => turn(c, KIT_CHAIR_YAW)),
-      chairsB: deskChairs.filter((_, i) => i % 2 === 1).map((c) => turn(c, KIT_CHAIR_YAW)),
-      meetChairs: chairs.filter((c) => c.meet).map((c) => turn(c, KIT_CHAIR_YAW)),
-      tables: on(layout.tables),
-      woodDesks: exec.map((it) => turn(it, Math.PI / 2)),
-      managerChairs: exec.map((it) => turn({ ...it, z: it.z + (it.r ? 0.85 : -0.85) }, KIT_CHAIR_YAW)),
-      books: exec.map((it) => ({ ...it, x: it.x + 0.35, y: 0.74 })),
-      lounge: on(layout.lounge),
-    };
-  }, [layout, selected]);
-  const p = kit.parts;
-  return (
-    <group>
-      <KitInstances parts={p.ferliDesk} items={set.desks} />
-      <KitInstances parts={p.markusBlack} items={set.chairsA} />
-      <KitInstances parts={p.markusBlue} items={set.chairsB} />
-      <KitInstances parts={p.leatherChair} items={set.meetChairs} />
-      <KitInstances parts={p.conference} items={set.tables} />
-      <KitInstances parts={p.woodDesk} items={set.woodDesks} />
-      <KitInstances parts={p.managerChair} items={set.managerChairs} />
-      <KitInstances parts={p.books} items={set.books} />
-      <KitInstances parts={p.flatiron} items={set.lounge} />
-    </group>
-  );
-}
-
 /** The stone building from the kit, as a lit neighbour across the plaza. */
 function Neighbour() {
   const { scene } = useGLTF(KIT_URL, DRACO_PATH);
@@ -964,49 +325,15 @@ function Neighbour() {
 function Building({ selected, layout }: { selected: number | null; layout: Layout }) {
   const { scene } = useGLTF(BUILDING_URL, DRACO_PATH);
   const parts = useMemo(() => prepareBuilding(scene, CUT, CLIP_PLANES), [scene]);
-  const execElsewhere = useMemo(() => (selected === null ? layout.exec : layout.exec.filter((it) => it.f !== selected)), [layout, selected]);
-
   return (
     <group>
       <primitive object={parts.root} />
-
-      <Boxes items={layout.desks} size={DESK_TOP} y={0.72} exclude={selected} offset={deskTopOffset}>
-        <meshStandardMaterial color="#3a3f4a" roughness={0.6} clippingPlanes={CLIP_PLANES} />
-      </Boxes>
-      <Boxes items={layout.chairs} size={CHAIR} y={0.47} exclude={selected}>
-        <meshStandardMaterial color="#17181d" roughness={0.7} clippingPlanes={CLIP_PLANES} />
-      </Boxes>
-      <Boxes items={layout.monitors} size={MONITOR} y={1.0}>
-        <meshBasicMaterial color={MONITOR_GLOW} toneMapped={false} clippingPlanes={CLIP_PLANES} />
-      </Boxes>
-      <Boxes items={layout.monitors} size={MONITOR_BACK} y={1.0} offset={BEHIND_FRAME}>
-        <meshStandardMaterial color="#14161b" roughness={0.45} metalness={0.4} clippingPlanes={CLIP_PLANES} />
-      </Boxes>
-      <Boxes items={layout.monitors} size={MONITOR_NECK} y={0.8} offset={BEHIND_STAND}>
-        <meshStandardMaterial color="#2a2d34" roughness={0.4} metalness={0.6} clippingPlanes={CLIP_PLANES} />
-      </Boxes>
-      <Boxes items={layout.monitors} size={MONITOR_FOOT} y={0.752} offset={BEHIND_STAND}>
-        <meshStandardMaterial color="#2a2d34" roughness={0.4} metalness={0.6} clippingPlanes={CLIP_PLANES} />
-      </Boxes>
-      {parts.exec.map((p, i) => (
-        <ModelInstances key={i} geometry={p.geometry} material={p.material} items={execElsewhere} />
-      ))}
-      <Boxes items={layout.glass} size={ONE} y={0}>
-        <meshStandardMaterial color="#cfe0f0" transparent opacity={0.16} roughness={0.05} metalness={0.3} depthWrite={false} clippingPlanes={CLIP_PLANES} />
-      </Boxes>
-      <Boxes items={layout.tables} size={TABLE} y={0.74} exclude={selected}>
-        <meshStandardMaterial color="#d8d2c8" roughness={0.5} clippingPlanes={CLIP_PLANES} />
-      </Boxes>
-      <Boxes items={layout.screens} size={SCREEN} y={1.5}>
-        <meshBasicMaterial color={SCREEN_GLOW} toneMapped={false} clippingPlanes={CLIP_PLANES} />
-      </Boxes>
-      <Boxes items={layout.sofas} size={SOFA} y={0.38}>
-        <meshStandardMaterial color="#4c3f7a" roughness={0.85} clippingPlanes={CLIP_PLANES} />
-      </Boxes>
-      <Boxes items={layout.lounge} size={LOUNGE_TABLE} y={0.4} exclude={selected}>
-        <meshStandardMaterial color="#6b5a45" roughness={0.6} clippingPlanes={CLIP_PLANES} />
-      </Boxes>
-      <CeilingLights panels={layout.panels} live selected={selected} />
+      <Interior layout={layout} selected={selected} exec={parts.exec} />
+      {selected !== null && (
+        <Suspense fallback={null}>
+          <Furnishing selected={selected} layout={layout} builtDesk={parts.desk} />
+        </Suspense>
+      )}
     </group>
   );
 }
@@ -1022,32 +349,34 @@ export default function BuildingScene({
   walking,
   onSelect,
   onReady,
+  onElevator,
 }: {
   active: boolean;
   selected: number | null;
   walking: boolean;
   onSelect: (i: number) => void;
   onReady: () => void;
+  onElevator: (at: boolean) => void;
 }) {
   const layout = useMemo(() => buildLayout(), []);
   return (
     <Canvas
       dpr={[1, 1.6]}
       frameloop={active ? 'always' : 'never'}
-      camera={{ position: [130, 70, 190], fov: ORBIT_FOV, near: ORBIT_NEAR, far: 1600 }}
+      camera={{ position: [130, 70, 190], fov: ORBIT_FOV, near: ORBIT_NEAR, far: 2600 }}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
       onCreated={({ gl }) => {
         gl.localClippingEnabled = true;
       }}
     >
       <color attach="background" args={['#060912']} />
-      <fog attach="fog" args={['#0a0f1c', 260, 900]} />
+      <fog attach="fog" args={['#0b1020', 320, 1200]} />
       <hemisphereLight args={['#5a6c9c', '#07080c', 0.55]} />
       <directionalLight position={[-220, 300, -160]} intensity={0.55} color="#b8c8ff" />
-      <Stars radius={700} depth={120} count={1600} factor={5} fade speed={0.4} />
-      <mesh position={[-380, 300, -620]}>
-        <sphereGeometry args={[14, 32, 16]} />
-        <meshBasicMaterial color="#f4f1e6" toneMapped={false} />
+      <Stars radius={1400} depth={200} count={1600} factor={12} fade speed={0.4} />
+      <mesh position={[-600, 520, -1100]}>
+        <sphereGeometry args={[24, 32, 16]} />
+        <meshBasicMaterial color="#f4f1e6" toneMapped={false} fog={false} />
       </mesh>
       <Environment resolution={128} frames={1}>
         <color attach="background" args={['#04060c']} />
@@ -1056,30 +385,31 @@ export default function BuildingScene({
         <Lightformer form="rect" intensity={0.6} color="#a78bfa" position={[-10, 3, 5]} scale={[6, 6, 1]} rotation-y={Math.PI / 2} />
         <Lightformer form="ring" intensity={0.5} color="#ffffff" position={[0, 10, 0]} scale={4} rotation-x={Math.PI / 2} />
       </Environment>
-      <Ground />
-      <City />
-      <Traffic />
+      <Suspense fallback={null}>
+        <City />
+      </Suspense>
       <Suspense fallback={null}>
         <Building selected={selected} layout={layout} />
-        {selected !== null && (
-          <Suspense fallback={null}>
-            <Furnishing selected={selected} layout={layout} />
-          </Suspense>
-        )}
         <Suspense fallback={null}>
           <Neighbour />
         </Suspense>
+        <Suspense fallback={null}>
+          <Entrance />
+        </Suspense>
         <Crown />
         {!walking && <FloorHits selected={selected} onSelect={onSelect} />}
-        {walking && selected !== null && <WalkRig floor={selected} layout={layout} />}
+        {walking && <WalkRig zone={selected ?? 'street'} layout={layout} onElevator={onElevator} />}
         <SelectedFloorLights selected={selected} />
         <CutawayAnimator selected={selected} walking={walking} />
         <Ready onReady={onReady} />
       </Suspense>
-      <CameraRig selected={selected} walking={walking && selected !== null} />
+      <CameraRig selected={selected} walking={walking} />
     </Canvas>
   );
 }
 
 useGLTF.preload(BUILDING_URL, DRACO_PATH);
 useGLTF.preload(KIT_URL, DRACO_PATH);
+useGLTF.preload(TRAFFIC_A_URL, DRACO_PATH);
+useGLTF.preload(TRAFFIC_B_URL, DRACO_PATH);
+useGLTF.preload(HERO_CAR_URL, DRACO_PATH);
