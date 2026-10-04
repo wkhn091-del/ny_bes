@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { Building2, ChevronLeft, LayoutGrid, LogOut, Menu, Monitor, Search, Users, X, type LucideIcon } from 'lucide-react';
+import { Box, Building2, ChevronLeft, LayoutGrid, LogOut, Menu, Monitor, Search, Users, X, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -21,6 +21,7 @@ const LINKS: { href: string; label: string; hint: string; icon: LucideIcon }[] =
   { href: '/spaces?type=meetingRoom', label: 'חדרי ישיבות', hint: 'מסך, לוח וציוד וידאו', icon: Users },
   { href: '/spaces?type=privateOffice', label: 'משרדים פרטיים', hint: 'דלת סגורה, לשעה או ליום', icon: Building2 },
   { href: '/spaces?type=hotDesk', label: 'עמדות עבודה', hint: 'מתיישבים ועובדים, לפי שעה', icon: Monitor },
+  { href: '/building', label: 'הבניין בתלת־ממד', hint: 'סיור בקומות, מהרחוב ועד הגג', icon: Box },
 ];
 
 const ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
@@ -147,7 +148,7 @@ export function NavbarClient({ user: serverUser, favoriteIds }: Props) {
       <ul className="hidden items-center gap-1 lg:flex">
         {LINKS.map((link) => (
           <li key={link.href}>
-            <Link href={link.href} className="rounded-md px-3 py-2 text-sm text-muted transition-colors hover:text-fg">
+            <Link href={link.href} className="whitespace-nowrap rounded-md px-2 py-2 text-sm text-muted transition-colors hover:text-fg xl:px-3">
               {link.label}
             </Link>
           </li>
