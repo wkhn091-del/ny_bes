@@ -9,9 +9,9 @@ export const CLIP_PLANES = [CLIP];
 
 /**
  * Walker state shared across the scene: \`inside\` once the camera has passed a floor's facade,
- * and the street position so traffic can stop at the crossing.
+ * the street position so traffic can stop at the crossing, and `home` while in the residence next door.
  */
-export const WALK = { inside: false, street: false, x: 0, z: 0 };
+export const WALK = { inside: false, street: false, home: false, x: 0, z: 0 };
 
 export function seededRandom(seed: number): () => number {
   let s = seed;

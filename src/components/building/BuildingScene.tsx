@@ -14,6 +14,7 @@ import { ELEVATOR_URL, Entrance, FloorLift, FloorLiftLight, FOUNTAIN_URL, HERO_C
 import { EXEC_URL, Furnishing, Interior, LOUNGE_URL, MEET_URL } from './interior';
 import { buildLayout, type Layout } from './layout';
 import { NYC_TOWER_URL, NYC_URL, NycBlocks, NycTower, liftOverNyc } from './nyc';
+import { RES_LOBBY_URL, RES_LOFT_URL, Residence, ResidenceEntrance, ResidenceLights, homeZone } from './residence';
 import { CLIP, CLIP_PLANES, CUT, WALK } from './shared';
 import { SKY, applyDayTints, dayTint, type SkyMode } from './sky';
 import { WalkRig } from './walk';
@@ -376,6 +377,8 @@ export default function BuildingScene({
   onElevator,
   skyMode,
   rideTo,
+  home,
+  homeRideTo,
 }: {
   active: boolean;
   selected: number | null;
@@ -386,8 +389,17 @@ export default function BuildingScene({
   skyMode: SkyMode;
   /** The floor a ride is heading to, so its cabin is already standing when you arrive. */
   rideTo: number | null;
+  /** In the residence next door: 0 its lobby, 1–8 an apartment; 
+ull elsewhere. */
+  home: number | null;
+  homeRideTo: number | null;
 }) {
   const layout = useMemo(() => buildLayout(), []);
+  useEffect(() => {
+    if (!walking) return;
+    useGLTF.preload(RES_LOBBY_URL, DRACO_PATH);
+    useGLTF.preload(RES_LOFT_URL, DRACO_PATH);
+  }, [walking]);
   return (
     <Canvas
       dpr={[1, 1.6]}
@@ -424,7 +436,14 @@ export default function BuildingScene({
         </Suspense>
         <Crown />
         {!walking && <FloorHits selected={selected} onSelect={onSelect} />}
-        {walking && <WalkRig zone={selected ?? 'street'} layout={layout} onElevator={onElevator} />}
+        <ResidenceEntrance />
+        {walking && <WalkRig zone={home !== null ? homeZone(home) : (selected ?? 'street')} layout={layout} onElevator={onElevator} />}
+        {walking && home !== null && (
+          <Suspense fallback={null}>
+            <Residence level={home} rideTo={homeRideTo} />
+          </Suspense>
+        )}
+        <ResidenceLights level={walking ? home : null} />
         {walking && [...new Set([selected, rideTo])].map((f) => f !== null && <FloorLift key={f} floor={f} />)}
         <FloorLiftLight floor={walking ? selected : null} />
         <SelectedFloorLights selected={selected} />

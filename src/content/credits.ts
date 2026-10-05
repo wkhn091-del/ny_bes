@@ -26,7 +26,15 @@ export const CREDITS: Credit[] = [
     authorUrl: 'https://sketchfab.com/dasy444',
     source: 'https://sketchfab.com/3d-models/free-loft-17-interior-floors-view-of-the-city-1bc27584241b4078975b31dd4610d6e0',
     ...CC_BY_4,
-    use: 'ספת העור, הכורסה, השולחן, השטיח והאגרטל בטרקלין של כל קומה (נלקחו רק הרהיטים)',
+    use: 'ספת העור, הכורסה, השולחן, השטיח והאגרטל בטרקלין של כל קומה (נלקחו רק הרהיטים), וחלל הדירות בבניין המגורים (חתוך ומפושט)',
+  },
+  {
+    title: 'Artcollection room with Office',
+    author: 'M.A',
+    authorUrl: 'https://sketchfab.com/Jaideep.Malampati',
+    source: 'https://sketchfab.com/3d-models/artcollection-room-with-office-96f53027ae2d41ba8031b29724ae8b7f',
+    ...CC_BY_4,
+    use: 'אולם הבריכה בלובי בניין המגורים (חתוך, מפושט ודחוס)',
   },
   {
     title: 'Meeting room',

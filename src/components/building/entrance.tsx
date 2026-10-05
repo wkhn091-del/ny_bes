@@ -71,7 +71,7 @@ const DOOR_PLANTS: [number, number][] = [
  * their doors sit toward the middle. Model units: the cabin spans x −3.05…1.35 and z −1.49…1.21
  * around its door, the interior x −2.91…1.11 and z −1.37…0.97, the opening ±0.95.
  */
-const CAB_SCALE = 0.9;
+export const CAB_SCALE = 0.9;
 const CAB_FRONT_Z = ELEVATOR.z + 2.4;
 const CABS = [
   { door: -0.8, flip: true },
@@ -417,14 +417,14 @@ const WATER_Y = 0.32;
 const BRONZE = new MeshStandardMaterial({ name: 'LiftBronze', color: '#3b332b', metalness: 0.7, roughness: 0.32 });
 
 /** Slides a cabin's doors: each leaf moves one door width into the wall pocket. */
-function slideDoors(cabin: Object3D, open: number) {
+export function slideDoors(cabin: Object3D, open: number) {
   cabin.traverse((o) => {
     if (o.userData.closedX === undefined) return;
     o.position.x = (o.userData.closedX as number) + (o.name.startsWith('DoorL') ? -1 : 1) * open * 0.95;
   });
 }
 
-function cloneCabin(scene: Object3D): Object3D {
+export function cloneCabin(scene: Object3D): Object3D {
   const c = scene.clone(true);
   c.traverse((o) => {
     if (/^Door[LR]/.test(o.name)) o.userData.closedX = o.position.x;
@@ -534,7 +534,7 @@ export function FloorLiftLight({ floor }: { floor: number | null }) {
   );
 }
 
-function PlantParts({ parts, items }: { parts: KitPart[] | undefined; items: Item[] }) {
+export function PlantParts({ parts, items }: { parts: KitPart[] | undefined; items: Item[] }) {
   return parts?.map((p, i) => <ModelInstances key={i} geometry={p.geometry} material={p.material} items={items} />);
 }
 

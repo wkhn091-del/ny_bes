@@ -21,9 +21,10 @@ import {
 import { keepWalkable, obstaclesFor, type Layout } from './layout';
 import { NYC_TOP, inNyc } from './nyc';
 import { WALK } from './shared';
+import { HOME_SPAWN, type HomeZone, homeArrival, homeFlight, homeFloorAt, homeLiftRoute, homeObstacles, inHomeLift, isHomeZone } from './residence';
 import { WALK_SIGNAL } from './walk-signal';
 
-export type Zone = number | 'street';
+export type Zone = number | 'street' | HomeZone;
 
 const EYE = 1.6;
 const WALK_SPEED = 3;
@@ -56,7 +57,7 @@ function streetFlight(from: Vector3): Vector3[] {
   return path;
 }
 
-const eyeAt = (zone: Zone, x: number, z: number) => (zone === 'street' ? groundY(x, z) : floorY(zone)) + EYE;
+const eyeAt = (zone: Zone, x: number, z: number) => (zone === 'street' ? groundY(x, z) : isHomeZone(zone) ? homeFloorAt(zone, x, z) : floorY(zone)) + EYE;
 const inRect = (x: number, z: number, r: { x0: number; x1: number; z0: number; z1: number }) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
 
 function setTouchAction(el: HTMLElement, value: string) {
@@ -77,6 +78,7 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
   const el = useThree((st) => st.gl.domElement);
   const blocked = useMemo(() => {
     if (zone === 'street') return { rects: STREET_RECTS, bounds: STREET_BOUNDS };
+    if (isHomeZone(zone)) return homeObstacles(zone);
     const floor = obstaclesFor(layout, zone);
     return { rects: [...floor.rects, ...floorLiftRects()], bounds: floor.bounds };
   }, [layout, zone]);
@@ -106,6 +108,7 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
     () => () => {
       WALK.inside = false;
       WALK.street = false;
+      WALK.home = false;
       onElevator(false);
     },
     [onElevator],
@@ -117,9 +120,11 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
     const cam = state.camera as PerspectiveCamera;
     const { dir, look, before } = v;
     const street = zone === 'street';
+    const home = isHomeZone(zone);
 
     if (n.zone !== zone) {
       const first = n.zone === null;
+      const fromHome = isHomeZone(n.zone);
       n.zone = zone;
       n.keys.clear();
       n.path = [];
@@ -130,23 +135,32 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
         n.pitch = Math.asin(clamp(dir.y, -1, 1));
         n.flying = true;
         if (street) n.path = streetFlight(cam.position);
+        else if (home) n.path = homeFlight(cam.position).map((q) => new Vector3(q.x, q.y, q.z));
         else n.path = [new Vector3(ENTRY_X, floorY(zone) + EYE + 1.2, APPROACH_Z), new Vector3(ENTRY_X, floorY(zone) + EYE, SPAWN_Z)];
       } else {
         n.flying = false;
         n.snap = true;
         n.auto = false;
+        n.yawGoal = null;
         if (WALK_SIGNAL.arrive) {
           WALK_SIGNAL.arrive = false;
-          const at = street ? LIFT_ARRIVAL.lobby : LIFT_ARRIVAL.floor;
+          const at = home ? homeArrival(zone) : { ...(street ? LIFT_ARRIVAL.lobby : LIFT_ARRIVAL.floor), yaw: FACE_OUT };
           n.pos.set(at.x, eyeAt(zone, at.x, at.z), at.z);
-          n.yaw = FACE_OUT;
-          n.yawGoal = null;
+          n.yaw = at.yaw;
           n.pitch = -0.05;
+        } else if (home) {
+          n.pos.set(HOME_SPAWN.x, eyeAt(zone, HOME_SPAWN.x, HOME_SPAWN.z), HOME_SPAWN.z);
+          n.yaw = HOME_SPAWN.yaw;
+          n.pitch = -0.05;
+        } else if (street && fromHome) {
+          n.pos.copy(STREET_SPAWN);
+          n.yaw = yawToward(n.pos, STREET_LOOK);
+          n.pitch = 0;
         } else if (street) {
           n.pos.set(LOBBY_SPAWN.x, LOBBY.floor + EYE, LOBBY_SPAWN.z);
           n.yaw = Math.PI;
           n.pitch = -0.05;
-        } else {
+        } else if (typeof zone === 'number') {
           n.pos.set(ENTRY_X, floorY(zone) + EYE, SPAWN_Z);
           look.set(ARRIVAL_LOOK.x, n.pos.y - 0.5, ARRIVAL_LOOK.z);
           n.yaw = yawToward(n.pos, look);
@@ -156,13 +170,15 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
     }
 
     if (street) look.copy(STREET_LOOK);
+    else if (home) look.set(HOME_SPAWN.x, 1.4, HOME_SPAWN.z - 12);
     else look.set(ARRIVAL_LOOK.x, floorY(zone) + EYE - 0.5, ARRIVAL_LOOK.z);
 
     const p = n.pos;
     if (WALK_SIGNAL.goElevator && !n.flying) {
       WALK_SIGNAL.goElevator = false;
       n.keys.clear();
-      n.path = (street ? elevatorRoute(p.x, p.z) : floorLiftRoute(p.x, p.z)).map((q) => new Vector3(q.x, 0, q.z));
+      const route = home ? homeLiftRoute(zone, p.x, p.z) : street ? elevatorRoute(p.x, p.z) : floorLiftRoute(p.x, p.z);
+      n.path = route.map((q) => new Vector3(q.x, 0, q.z));
       n.auto = true;
     }
     if (WALK_SIGNAL.riding) {
@@ -174,7 +190,7 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
       const next = n.path[0];
       n.yawGoal = next ? yawToward(p, look.set(next.x, p.y, next.z)) : n.yawGoal;
       if (!next) {
-        n.yawGoal = FACE_OUT;
+        n.yawGoal = home ? homeArrival(zone).yaw : FACE_OUT;
         n.auto = false;
       }
     }
@@ -226,10 +242,11 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
       n.pitch += (goalPitch - n.pitch) * t;
     }
     WALK.street = street;
+    WALK.home = home;
     WALK.x = p.x;
     WALK.z = p.z;
-    WALK.inside = !street && p.z < PLATE.z - 0.3 && Math.abs(p.y - eyeAt(zone, p.x, p.z)) < 2;
-    const atElevator = !n.flying && inRect(p.x, p.z, street ? ELEVATOR_ZONE : FLOOR_LIFT_ZONE);
+    WALK.inside = typeof zone === 'number' && p.z < PLATE.z - 0.3 && Math.abs(p.y - eyeAt(zone, p.x, p.z)) < 2;
+    const atElevator = !n.flying && (home ? inHomeLift(zone, p.x, p.z) : inRect(p.x, p.z, street ? ELEVATOR_ZONE : FLOOR_LIFT_ZONE));
     if (atElevator !== n.atElevator) {
       n.atElevator = atElevator;
       onElevator(atElevator);
@@ -270,6 +287,15 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
     return (
       <mesh rotation-x={-Math.PI / 2} position={[(b.x0 + b.x1) / 2, 0.3, (b.z0 + b.z1) / 2]} onClick={onGroundClick}>
         <planeGeometry args={[b.x1 - b.x0, b.z1 - b.z0]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
+      </mesh>
+    );
+  }
+  if (isHomeZone(zone)) {
+    const b = blocked.bounds;
+    return (
+      <mesh rotation-x={-Math.PI / 2} position={[(b.x0 + b.x1) / 2, eyeAt(zone, b.x1, b.z1) - EYE + 0.02, (b.z0 + b.z1) / 2]} onClick={onGroundClick}>
+        <planeGeometry args={[b.x1 - b.x0 + 2, b.z1 - b.z0 + 2]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
       </mesh>
     );

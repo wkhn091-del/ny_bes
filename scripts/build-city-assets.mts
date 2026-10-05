@@ -235,6 +235,22 @@ async function main() {
       { match: /^Cube\.036_/, as: 'LoftPlant' },
     ],
   });
+  /** The pool hall without the office at its front end; the residence draws its own foyer there. */
+  const poolHall = (_x: number, _y: number, z: number) => z < 13.4;
+  await build('free_loft_17_interior_floors_view_of_the_city.glb', 'res-loft.glb', {
+    maxTexture: 1024,
+    keep: [{ match: /./, as: 'Loft', crop: (x, y, z) => x > -4.4 && y > -0.3 && z > -12 }],
+    merge: true,
+  });
+  await build('artcollection_room_with_office.glb', 'res-lobby.glb', {
+    maxTexture: 1024,
+    keep: [
+      { match: /illar side @rench design/, as: 'Hall', simplify: 0.08, error: 0.01, crop: poolHall },
+      { match: /curtain|Rock_01|^Sphere/, as: 'Hall', simplify: 0.2, error: 0.01, crop: poolHall },
+      { match: /./, as: 'Hall', simplify: 0.6, error: 0.004, crop: poolHall },
+    ],
+    merge: true,
+  });
   await build('meeting_room.glb', 'meeting-set.glb', {
     maxTexture: 2048,
     keep: [{ match: /^bureau_sol_/, as: 'MeetSet', crop: (x, y, z) => x > 16.8 && x < 20.2 && z > -17.6 && z < -12.4 && y > 0.02 && y < 1.6 }],

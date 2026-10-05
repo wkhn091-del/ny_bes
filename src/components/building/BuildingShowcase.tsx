@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Box, Clock, DoorOpen, Footprints, Hand, LogOut, Maximize2, Minimize2, Moon, Music, SkipForward, Sun, VolumeX } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Box, Clock, DoorOpen, Footprints, Hand, Home, LogOut, Maximize2, Minimize2, Moon, Music, SkipForward, Sun, VolumeX } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -10,6 +10,7 @@ import { FLOOR_COUNT, PROGRAM_COPY, programOf } from '@/components/three/buildin
 import { use3DCapable } from '@/components/three/capability';
 import { useFullscreen, useInView } from '@/components/three/stage-hooks';
 import type { Mood, Track } from '@/content/music';
+import { RESIDENCE_NAME, RESIDENTS } from '@/content/residents';
 import { AmbientMusic } from './ambient-music';
 import { WALK_SIGNAL } from './walk-signal';
 import { daylightOf, sunPosition, type SkyMode } from './sky';
@@ -34,11 +35,15 @@ export const BUILDING_POSTER = '/images/renders/building-poster.webp';
 
 const FLOORS_TOP_DOWN = Array.from({ length: FLOOR_COUNT }, (_, k) => FLOOR_COUNT - 1 - k);
 
-/** A trip in the cabin you are standing in; `null` is the lobby. */
-type Ride = { from: number | null; to: number | null };
+/**
+ * A trip in the cabin you are standing in. Office levels: −1 the lobby, then floor indexes;
+ * residence levels: 0 the lobby, then apartments 1–8.
+ */
+type Ride = { building: 'office' | 'home'; from: number; to: number };
 const LOBBY_LEVEL = -1;
 const levelOf = (i: number | null) => i ?? LOBBY_LEVEL;
-const levelLabel = (level: number) => (level === LOBBY_LEVEL ? 'L' : String(level + 1));
+const levelLabel = (r: Ride, level: number) => (r.building === 'home' ? (level === 0 ? 'L' : String(level)) : level === LOBBY_LEVEL ? 'L' : String(level + 1));
+const destination = (r: Ride) => (r.building === 'home' ? (r.to === 0 ? 'לובי' : `דירה ${r.to}`) : r.to === LOBBY_LEVEL ? 'לובי' : `קומה ${r.to + 1}`);
 /** Doors take about a second to close before the cabin moves. */
 const DOORS_MS = 1200;
 const chip = 'rounded-full bg-black/60 text-white backdrop-blur';
@@ -54,6 +59,7 @@ export function BuildingShowcase({ className }: { className?: string }) {
   const [elevatorTrips, setElevatorTrips] = useState(0);
   const [atElevator, setAtElevator] = useState(false);
   const [ride, setRide] = useState<Ride | null>(null);
+  const [home, setHome] = useState<number | null>(null);
   const [rideLevel, setRideLevel] = useState(LOBBY_LEVEL);
   const [skyMode, setSkyMode] = useState<SkyMode>('auto');
   const [music, setMusic] = useState(false);
@@ -87,11 +93,22 @@ export function BuildingShowcase({ className }: { className?: string }) {
   const choose = useCallback(
     (i: number | null) => {
       if (walking) {
-        if (i === selected || ride) return;
+        if (ride) return;
+        if (home !== null) {
+          setHome(null);
+          setSelected(i);
+          setElevatorTrips((t) => t + 1);
+          return;
+        }
+        if (i === selected) return;
         if (atElevator) {
           WALK_SIGNAL.riding = true;
           setRideLevel(levelOf(selected));
-          setRide({ from: selected, to: i });
+          setRide({
+            building: 'office',
+            from: levelOf(selected),
+            to: levelOf(i),
+          });
           return;
         }
         setSelected(i);
@@ -100,19 +117,46 @@ export function BuildingShowcase({ className }: { className?: string }) {
       }
       setSelected(i === selected ? null : i);
     },
-    [walking, selected, ride, atElevator],
+    [walking, selected, ride, atElevator, home],
   );
+
+  const chooseHome = useCallback(
+    (level: number) => {
+      if (ride || home === null || level === home) return;
+      if (atElevator) {
+        WALK_SIGNAL.riding = true;
+        setRideLevel(home);
+        setRide({ building: 'home', from: home, to: level });
+        return;
+      }
+      setHome(level);
+      setElevatorTrips((t) => t + 1);
+    },
+    [ride, home, atElevator],
+  );
+
+  const enterHome = useCallback(() => {
+    setSelected(null);
+    setHome(0);
+    if (walking) setElevatorTrips((t) => t + 1);
+    else setWalking(true);
+  }, [walking]);
+
+  const leaveHome = useCallback(() => {
+    setHome(null);
+    setElevatorTrips((t) => t + 1);
+  }, []);
 
   const leaveWalk = useCallback(() => {
     setWalking(false);
     setRide(null);
+    setHome(null);
     WALK_SIGNAL.arrive = false;
   }, []);
 
   useEffect(() => {
     if (!ride) return;
-    const from = levelOf(ride.from);
-    const to = levelOf(ride.to);
+    const { from, to } = ride;
     const steps = Math.abs(to - from);
     const stepMs = Math.min(650, Math.max(110, 2600 / steps));
     const arrive = DOORS_MS + steps * stepMs + 250;
@@ -127,7 +171,8 @@ export function BuildingShowcase({ className }: { className?: string }) {
       if (!arrived && t >= arrive) {
         arrived = true;
         WALK_SIGNAL.arrive = true;
-        setSelected(ride.to);
+        if (ride.building === 'home') setHome(to);
+        else setSelected(to === LOBBY_LEVEL ? null : to);
       }
       if (t >= arrive + 450) WALK_SIGNAL.riding = false;
       if (t >= arrive + 1500) setRide(null);
@@ -163,11 +208,7 @@ export function BuildingShowcase({ className }: { className?: string }) {
         onClick={() => choose(i)}
         aria-pressed={on}
         title={`קומה ${i + 1} · ${PROGRAM_COPY[programOf(i)].title}`}
-        className={clsx(
-          'shrink-0 rounded-md font-semibold tabular-nums transition-colors',
-          on ? 'bg-accent text-accent-fg' : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white',
-          extra,
-        )}
+        className={clsx('shrink-0 rounded-md font-semibold tabular-nums transition-colors', on ? 'bg-accent text-accent-fg' : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white', extra)}
       >
         {i + 1}
       </button>
@@ -184,29 +225,33 @@ export function BuildingShowcase({ className }: { className?: string }) {
         className={clsx('object-cover transition-opacity duration-(--dur-reveal) ease-(--ease-out)', ready && 'opacity-0')}
       />
       {mounted && (
-        <div
-          className={clsx('absolute inset-0 transition-opacity duration-(--dur-reveal) ease-(--ease-out)', ready ? 'opacity-100' : 'opacity-0')}
-          aria-hidden="true"
-        >
-          <BuildingScene active={near} selected={selected} walking={walking} onSelect={choose} onReady={onReady} onElevator={onElevator} skyMode={skyMode} rideTo={ride ? ride.to : null} />
+        <div className={clsx('absolute inset-0 transition-opacity duration-(--dur-reveal) ease-(--ease-out)', ready ? 'opacity-100' : 'opacity-0')} aria-hidden="true">
+          <BuildingScene
+            active={near}
+            selected={selected}
+            walking={walking}
+            onSelect={choose}
+            onReady={onReady}
+            onElevator={onElevator}
+            skyMode={skyMode}
+            rideTo={ride?.building === 'office' && ride.to !== LOBBY_LEVEL ? ride.to : null}
+            home={home}
+            homeRideTo={ride?.building === 'home' ? ride.to : null}
+          />
         </div>
       )}
 
-      {walking && elevatorTrips > 0 && (
-        <div key={elevatorTrips} className="pointer-events-none absolute inset-0 animate-[elevator-fade_0.7s_ease-out_forwards] bg-black" aria-hidden="true" />
-      )}
+      {walking && elevatorTrips > 0 && <div key={elevatorTrips} className="pointer-events-none absolute inset-0 animate-[elevator-fade_0.7s_ease-out_forwards] bg-black" aria-hidden="true" />}
       {walking && ride && (
         <div
           role="status"
           className="pointer-events-none absolute left-1/2 top-16 flex -translate-x-1/2 flex-col items-center gap-1 rounded-2xl border border-white/10 bg-black/85 px-6 py-2.5 text-white shadow-2xl backdrop-blur"
         >
           <span dir="ltr" className="flex items-center gap-2 font-mono text-4xl font-bold tabular-nums text-amber-300 [text-shadow:0_0_12px_rgba(252,211,77,0.6)]">
-            {levelOf(ride.to) > levelOf(ride.from) ? <ArrowUp className="h-7 w-7" aria-hidden="true" /> : <ArrowDown className="h-7 w-7" aria-hidden="true" />}
-            {levelLabel(rideLevel)}
+            {ride.to > ride.from ? <ArrowUp className="h-7 w-7" aria-hidden="true" /> : <ArrowDown className="h-7 w-7" aria-hidden="true" />}
+            {levelLabel(ride, rideLevel)}
           </span>
-          <span className="text-2xs text-white/75">
-            {rideLevel === levelOf(ride.to) ? 'הגעתם · הדלתות נפתחות' : `בדרך ל${ride.to === null ? 'לובי' : `קומה ${ride.to + 1}`}`}
-          </span>
+          <span className="text-2xs text-white/75">{rideLevel === ride.to ? 'הגעתם · הדלתות נפתחות' : `בדרך ל${destination(ride)}`}</span>
         </div>
       )}
       {walking && !ride && !atElevator && (
@@ -233,25 +278,46 @@ export function BuildingShowcase({ className }: { className?: string }) {
             <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
             אתם במעלית · בחרו קומה
           </p>
-          <div className="mt-2.5 grid grid-cols-6 gap-1">
-            {selected !== null && (
-              <button type="button" onClick={() => choose(null)} className="h-8 rounded-md bg-white/10 text-xs font-semibold text-white/80 hover:bg-white/20 hover:text-white">
-                לובי
-              </button>
-            )}
-            {Array.from({ length: FLOOR_COUNT }, (_, i) => floorButton(i, 'h-8 text-xs'))}
-          </div>
+          {home === null ? (
+            <div className="mt-2.5 grid grid-cols-6 gap-1">
+              {selected !== null && (
+                <button type="button" onClick={() => choose(null)} className="h-8 rounded-md bg-white/10 text-xs font-semibold text-white/80 hover:bg-white/20 hover:text-white">
+                  לובי
+                </button>
+              )}
+              {Array.from({ length: FLOOR_COUNT }, (_, i) => floorButton(i, 'h-8 text-xs'))}
+            </div>
+          ) : (
+            <div className="mt-2.5 grid grid-cols-2 gap-1">
+              {home !== 0 && (
+                <button type="button" onClick={() => chooseHome(0)} className="col-span-2 h-8 rounded-md bg-white/10 text-xs font-semibold text-white/80 hover:bg-white/20 hover:text-white">
+                  לובי הדיירים
+                </button>
+              )}
+              {RESIDENTS.map((r) => (
+                <button
+                  key={r.apt}
+                  type="button"
+                  onClick={() => chooseHome(r.apt)}
+                  aria-pressed={home === r.apt}
+                  className={clsx(
+                    'flex h-9 items-center gap-1.5 rounded-md px-2 text-start text-2xs font-semibold transition-colors',
+                    home === r.apt ? 'bg-accent text-accent-fg' : 'bg-white/10 text-white/85 hover:bg-white/20',
+                  )}
+                >
+                  <span className="text-sm tabular-nums">{r.apt}</span>
+                  <span className="truncate">{r.family}</span>
+                </button>
+              ))}
+              <p className="col-span-2 text-center text-3xs text-white/50">הדיירים והשמות מדומים</p>
+            </div>
+          )}
           <p className="mt-2 text-center text-3xs text-white/60">או הקישו על הרצפה בחוץ כדי לצאת</p>
         </section>
       )}
       <span className={clsx(chip, 'pointer-events-none absolute left-3 top-3 px-2.5 py-1 text-xs font-medium')}>הדמיה</span>
       {capable && ready && supported && (
-        <button
-          type="button"
-          onClick={toggle}
-          className={clsx(chip, 'absolute right-3 top-3 p-2 hover:bg-black/75')}
-          aria-label={isFull ? 'יציאה ממסך מלא' : 'מסך מלא'}
-        >
+        <button type="button" onClick={toggle} className={clsx(chip, 'absolute right-3 top-3 p-2 hover:bg-black/75')} aria-label={isFull ? 'יציאה ממסך מלא' : 'מסך מלא'}>
           {isFull ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
         </button>
       )}
@@ -322,58 +388,107 @@ export function BuildingShowcase({ className }: { className?: string }) {
         </span>
       )}
 
-      <nav
-        aria-label="בחירת קומה"
-        className="absolute right-3 top-1/2 hidden max-h-[calc(100%-6rem)] -translate-y-1/2 grid-cols-2 gap-1 overflow-y-auto rounded-2xl bg-black/55 p-1.5 backdrop-blur [scrollbar-width:none] sm:grid"
-      >
-        <span className="col-span-2 pb-0.5 text-center text-3xs font-semibold text-white/60">קומה</span>
-        {FLOORS_TOP_DOWN.map((i) => floorButton(i, 'h-5 w-7 text-3xs'))}
-        <button
-          type="button"
-          onClick={() => choose(null)}
-          aria-pressed={selected === null}
-          className={clsx(
-            'col-span-2 mt-0.5 flex h-6 items-center justify-center gap-1 rounded-md text-3xs font-semibold transition-colors',
-            selected === null ? 'bg-accent text-accent-fg' : 'bg-white/10 text-white/80 hover:bg-white/20',
-          )}
-          aria-label={walking ? 'ללובי' : 'כל הבניין'}
-          title={walking ? 'ללובי' : 'כל הבניין'}
-        >
-          {walking ? <DoorOpen className="h-3.5 w-3.5" aria-hidden="true" /> : <Box className="h-3.5 w-3.5" aria-hidden="true" />}
-          {walking ? 'לובי' : null}
-        </button>
-      </nav>
-
-      <nav aria-label="בחירת קומה" className="absolute inset-x-0 bottom-0 flex gap-1.5 overflow-x-auto bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-6 [scrollbar-width:none] sm:hidden">
-        {walking && (
-          <button
-            type="button"
-            onClick={() => choose(null)}
-            aria-pressed={selected === null}
-            className={clsx(
-              'flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-semibold',
-              selected === null ? 'bg-accent text-accent-fg' : 'bg-white/10 text-white/80',
-            )}
+      {home === null && (
+        <>
+          <nav
+            aria-label="בחירת קומה"
+            className="absolute right-3 top-1/2 hidden max-h-[calc(100%-6rem)] -translate-y-1/2 grid-cols-2 gap-1 overflow-y-auto rounded-2xl bg-black/55 p-1.5 backdrop-blur [scrollbar-width:none] sm:grid"
           >
-            <DoorOpen className="h-3.5 w-3.5" aria-hidden="true" />
-            לובי
-          </button>
-        )}
-        {Array.from({ length: FLOOR_COUNT }, (_, i) => floorButton(i, 'h-8 min-w-8 px-1 text-xs'))}
-      </nav>
+            <span className="col-span-2 pb-0.5 text-center text-3xs font-semibold text-white/60">קומה</span>
+            {FLOORS_TOP_DOWN.map((i) => floorButton(i, 'h-5 w-7 text-3xs'))}
+            <button
+              type="button"
+              onClick={() => choose(null)}
+              aria-pressed={selected === null}
+              className={clsx(
+                'col-span-2 mt-0.5 flex h-6 items-center justify-center gap-1 rounded-md text-3xs font-semibold transition-colors',
+                selected === null ? 'bg-accent text-accent-fg' : 'bg-white/10 text-white/80 hover:bg-white/20',
+              )}
+              aria-label={walking ? 'ללובי' : 'כל הבניין'}
+              title={walking ? 'ללובי' : 'כל הבניין'}
+            >
+              {walking ? <DoorOpen className="h-3.5 w-3.5" aria-hidden="true" /> : <Box className="h-3.5 w-3.5" aria-hidden="true" />}
+              {walking ? 'לובי' : null}
+            </button>
+          </nav>
 
-      {capable && ready && selected === null && !walking && (
-        <button
-          type="button"
-          onClick={() => setWalking(true)}
-          className="absolute bottom-16 left-3 flex items-center gap-1.5 rounded-full bg-accent px-4 py-2.5 text-xs font-semibold text-accent-fg shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.97] sm:bottom-4 sm:left-4 sm:text-sm"
-        >
-          <Footprints className="h-4 w-4" aria-hidden="true" />
-          להיכנס לבניין מהרחוב
-        </button>
+          <nav
+            aria-label="בחירת קומה"
+            className="absolute inset-x-0 bottom-0 flex gap-1.5 overflow-x-auto bg-gradient-to-t from-black/70 to-transparent px-3 pb-3 pt-6 [scrollbar-width:none] sm:hidden"
+          >
+            {walking && (
+              <button
+                type="button"
+                onClick={() => choose(null)}
+                aria-pressed={selected === null}
+                className={clsx('flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-semibold', selected === null ? 'bg-accent text-accent-fg' : 'bg-white/10 text-white/80')}
+              >
+                <DoorOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                לובי
+              </button>
+            )}
+            {Array.from({ length: FLOOR_COUNT }, (_, i) => floorButton(i, 'h-8 min-w-8 px-1 text-xs'))}
+          </nav>
+        </>
       )}
 
-      {selected === null && walking && (
+      {capable && ready && selected === null && !walking && (
+        <div className="absolute bottom-16 left-3 flex flex-col items-start gap-2 sm:bottom-4 sm:left-4 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => setWalking(true)}
+            className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-2.5 text-xs font-semibold text-accent-fg shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.97] sm:text-sm"
+          >
+            <Footprints className="h-4 w-4" aria-hidden="true" />
+            להיכנס לבניין מהרחוב
+          </button>
+          <button
+            type="button"
+            onClick={enterHome}
+            className="flex items-center gap-1.5 rounded-full border border-white/25 bg-black/60 px-4 py-2.5 text-xs font-semibold text-white shadow-lg backdrop-blur transition-transform hover:scale-[1.03] active:scale-[0.97] sm:text-sm"
+          >
+            <Home className="h-4 w-4" aria-hidden="true" />
+            לבניין המגורים
+          </button>
+        </div>
+      )}
+
+      {home !== null && walking && (
+        <>
+          <div className={clsx(chip, 'pointer-events-none absolute left-1/2 top-3 flex max-w-[calc(100%-6rem)] -translate-x-1/2 flex-col items-center px-3.5 py-1.5 text-center')}>
+            <span className="whitespace-nowrap text-xs font-semibold sm:text-sm">
+              {home === 0 ? (
+                <>
+                  <span className="hidden sm:inline">{RESIDENCE_NAME} · </span>לובי הדיירים
+                </>
+              ) : (
+                `דירה ${home} · ${RESIDENTS[home - 1]!.family}`
+              )}
+            </span>
+            <span className="hidden text-2xs text-white/75 sm:block">{home === 0 ? 'לובי עם בריכה וקונסיירז׳ · 8 דירות דופלקס' : `דיירים מדומים · ${RESIDENTS[home - 1]!.note}`}</span>
+          </div>
+          <div className="absolute bottom-16 left-3 flex flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
+            <button
+              type="button"
+              onClick={leaveWalk}
+              className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-xs font-semibold text-zinc-950 shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.97]"
+            >
+              <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+              חזרה למבט על
+            </button>
+            <button
+              type="button"
+              onClick={leaveHome}
+              className="flex items-center gap-1.5 rounded-full border border-white/25 bg-black/60 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur hover:border-white"
+            >
+              <Footprints className="h-3.5 w-3.5" aria-hidden="true" />
+              לרחוב
+            </button>
+          </div>
+        </>
+      )}
+
+      {selected === null && home === null && walking && (
         <>
           <div className={clsx(chip, 'pointer-events-none absolute left-1/2 top-3 flex max-w-[calc(100%-6rem)] -translate-x-1/2 flex-col items-center px-3.5 py-1.5 text-center')}>
             <span className="text-xs font-semibold sm:text-sm">הרחוב והלובי</span>
@@ -383,7 +498,7 @@ export function BuildingShowcase({ className }: { className?: string }) {
               <span className="hidden sm:inline">הקישו על הכניסה, או לכו בעצמכם · W A S D או לחיצה על הקרקע</span>
             </span>
           </div>
-          <div className="absolute bottom-16 left-3 sm:bottom-4 sm:left-4">
+          <div className="absolute bottom-16 left-3 flex flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
             <button
               type="button"
               onClick={leaveWalk}
@@ -391,6 +506,14 @@ export function BuildingShowcase({ className }: { className?: string }) {
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
               חזרה למבט על
+            </button>
+            <button
+              type="button"
+              onClick={enterHome}
+              className="flex items-center gap-1.5 rounded-full border border-white/25 bg-black/60 px-3.5 py-2 text-xs font-semibold text-white backdrop-blur hover:border-white"
+            >
+              <Home className="h-3.5 w-3.5" aria-hidden="true" />
+              לבניין המגורים
             </button>
           </div>
         </>
