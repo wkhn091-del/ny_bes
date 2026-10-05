@@ -6,7 +6,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   Box3,
   BoxGeometry,
-  type BufferGeometry,
+  BufferAttribute,
+  BufferGeometry,
   CanvasTexture,
   Color,
   type InstancedMesh,
@@ -14,6 +15,7 @@ import {
   Matrix4,
   type Mesh,
   MeshBasicMaterial,
+  type MeshPhysicalMaterial,
   MeshStandardMaterial,
   type Object3D,
   PlaneGeometry,
@@ -22,6 +24,7 @@ import {
   SRGBColorSpace,
   Vector3,
 } from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { DRACO_PATH } from '@/components/three/desk-model';
 import { ModelInstances } from './interior';
 import { disposeGroups, groupsOf } from './realistic';
@@ -60,6 +63,9 @@ const _q = new Quaternion();
 const _p = new Vector3();
 const _s = new Vector3();
 const UP = new Vector3(0, 1, 0);
+const AXLE = new Vector3(1, 0, 0);
+const _w = new Matrix4();
+const _wq = new Quaternion();
 
 function setInstances(mesh: InstancedMesh | null, list: Matrix4[]) {
   if (!mesh) return;
@@ -463,31 +469,110 @@ export function GridStreets({ strips }: { strips: Strip[] }) {
 }
 
 type CarPart = { geometry: BufferGeometry; material: Material; paint: boolean };
-type CarModel = { parts: CarPart[]; length: number };
+/** One wheel, centred on its axle so it can spin about local X. */
+type WheelPart = { geometry: BufferGeometry; material: Material; center: Vector3; radius: number };
+type CarModel = { parts: CarPart[]; wheels: WheelPart[]; length: number };
+type CarSpec = {
+  /** Body panels repainted per car; null keeps the factory paint. */
+  repaint: RegExp | null;
+  /** Materials of the tyres and rims; all four wheels of a car share each one. */
+  wheels: RegExp;
+  /** Rebuild smooth normals on the repainted panels (models exported without their subdivision). */
+  smooth?: boolean;
+};
 
-/** Bakes a car into instancing parts. Body panels of the stock models are repainted per car; the supercars keep their factory paint. */
-function carModel(scene: Object3D, repaint: RegExp | null): CarModel {
+const _size = new Vector3();
+
+/** Splits a mesh holding all four wheels into one geometry per wheel, by which quarter of the footprint each triangle sits in. */
+function splitWheels(source: BufferGeometry, material: Material): WheelPart[] {
+  const g = source.index ? source.toNonIndexed() : source;
+  g.computeBoundingBox();
+  const mid = g.boundingBox!.getCenter(new Vector3());
+  const pos = g.getAttribute('position');
+  const quarters: number[][] = [[], [], [], []];
+  for (let t = 0; t < pos.count; t += 3) {
+    const x = pos.getX(t) + pos.getX(t + 1) + pos.getX(t + 2);
+    const z = pos.getZ(t) + pos.getZ(t + 1) + pos.getZ(t + 2);
+    quarters[(x / 3 > mid.x ? 1 : 0) + (z / 3 > mid.z ? 2 : 0)]!.push(t);
+  }
+  const wheels = quarters
+    .filter((tris) => tris.length > 0)
+    .map((tris) => {
+      const out = new BufferGeometry();
+      for (const [name, attr] of Object.entries(g.attributes)) {
+        const size = attr.itemSize;
+        const data = new Float32Array(tris.length * 3 * size);
+        tris.forEach((t, i) => {
+          for (let k = 0; k < 3; k++) for (let c = 0; c < size; c++) data[(i * 3 + k) * size + c] = attr.getComponent(t + k, c);
+        });
+        out.setAttribute(name, new BufferAttribute(data, size));
+      }
+      out.computeBoundingBox();
+      const center = out.boundingBox!.getCenter(new Vector3());
+      out.translate(-center.x, -center.y, -center.z);
+      return { geometry: out, material, center, radius: Math.max(0.2, (out.boundingBox!.max.y - out.boundingBox!.min.y) / 2) };
+    });
+  if (g !== source) g.dispose();
+  return wheels;
+}
+
+function smoothNormals(source: BufferGeometry): BufferGeometry {
+  const bare = source.clone();
+  for (const name of Object.keys(bare.attributes)) if (name !== 'position') bare.deleteAttribute(name);
+  const merged = mergeVertices(bare, 1e-4);
+  merged.computeVertexNormals();
+  bare.dispose();
+  source.dispose();
+  return merged;
+}
+
+/** Bakes a car into instancing parts: body parts that move with the car, and wheels that also roll. */
+function carModel(scene: Object3D, spec: CarSpec): CarModel {
   scene.updateMatrixWorld(true);
   const parts: CarPart[] = [];
+  const wheels: WheelPart[] = [];
   const box = new Box3();
   scene.traverse((o) => {
     const mesh = o as Mesh;
     if (!mesh.isMesh) return;
     const src = mesh.material as MeshStandardMaterial;
-    const paint = !!repaint?.test(src.name);
+    const paint = !!spec.repaint?.test(src.name);
     const material = src.clone();
     if (paint) {
       material.color.set('#ffffff');
-      material.metalness = 0.6;
-      material.roughness = 0.28;
+      material.metalness = 0.4;
+      material.roughness = 0.32;
+      const coat = material as MeshPhysicalMaterial;
+      if (coat.isMeshPhysicalMaterial) {
+        coat.clearcoat = 0.7;
+        coat.clearcoatRoughness = 0.12;
+      }
     }
-    const geometry = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
+    if (/glass|vetro/i.test(src.name)) {
+      material.metalness = 0;
+      material.roughness = Math.max(material.roughness, 0.14);
+      material.envMapIntensity = 0.7;
+    }
+    let geometry = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld);
     geometry.computeBoundingBox();
     box.union(geometry.boundingBox!);
+    const size = geometry.boundingBox!.getSize(_size);
+    if (spec.wheels.test(src.name) && size.y < 0.8 && size.x > 1.5 && size.z > 2.5) {
+      wheels.push(...splitWheels(geometry, material));
+      geometry.dispose();
+      return;
+    }
+    if (paint && spec.smooth) geometry = smoothNormals(geometry);
     parts.push({ geometry, material, paint });
   });
-  return { parts, length: box.max.z - box.min.z };
+  return { parts, wheels, length: box.max.z - box.min.z };
 }
+
+const CAR_SPECS = {
+  traffic: { repaint: /^(car paint|Material\.002)$/i, wheels: /^(Tires|Rims)$/, smooth: true },
+  goblin: { repaint: null, wheels: /^car_tire$/ },
+  revuelto: { repaint: null, wheels: /^(Wheel|Wheel_001|t_rims_black_shiny|CarPaintBlack)$/ },
+} satisfies Record<string, CarSpec>;
 
 const CARS_PER_LANE: Record<Lane['road'], number> = { avenue: 7, side: 5 };
 const PAINTS = ['#111214', '#111214', '#e8e8ea', '#e8e8ea', '#8a8f98', '#3a3f47', '#7a1018', '#1d3f8f', '#f2b705', '#0f3d2e'];
@@ -506,7 +591,8 @@ function walkerStop(lane: Lane): { at: number; grace: number } | null {
   return null;
 }
 
-type Car = { li: number; model: number; pos: number; cruise: number; speed: number; paint: string; braking: boolean };
+/** `roll`: metres driven, turned into wheel spin. */
+type Car = { li: number; model: number; pos: number; cruise: number; speed: number; paint: string; braking: boolean; roll: number };
 
 /**
  * Traffic that keeps to the right, holds its distance, obeys the junction signal (stops on red,
@@ -518,10 +604,13 @@ export function Traffic() {
   const goblin = useGLTF(GOBLIN_URL, DRACO_PATH);
   const revuelto = useGLTF(REVUELTO_URL, DRACO_PATH);
   const models = useMemo(
-    () => [carModel(a.scene, /^(car paint|Material\.002)$/i), carModel(goblin.scene, null), carModel(revuelto.scene, null)],
+    () => [carModel(a.scene, CAR_SPECS.traffic), carModel(goblin.scene, CAR_SPECS.goblin), carModel(revuelto.scene, CAR_SPECS.revuelto)],
     [a.scene, goblin.scene, revuelto.scene],
   );
-  useEffect(() => () => models.forEach((m) => m.parts.forEach((p) => (p.geometry.dispose(), p.material.dispose()))), [models]);
+  useEffect(
+    () => () => models.forEach((m) => [...m.parts, ...m.wheels].forEach((p) => (p.geometry.dispose(), p.material.dispose()))),
+    [models],
+  );
   const cars = useMemo(() => {
     const rnd = seededRandom(31);
     return LANES.flatMap((lane, li) => {
@@ -536,6 +625,7 @@ export function Traffic() {
           speed: 12,
           paint: PAINTS[Math.floor(rnd() * PAINTS.length)]!,
           braking: false,
+          roll: 0,
         };
       });
     });
@@ -543,6 +633,7 @@ export function Traffic() {
   const byLane = useMemo(() => LANES.map((_, li) => cars.filter((c) => c.li === li)), [cars]);
   const byModel = useMemo(() => models.map((_, mi) => cars.filter((c) => c.model === mi)), [models, cars]);
   const meshes = useRef<(InstancedMesh | null)[][]>([]);
+  const wheels = useRef<(InstancedMesh | null)[][]>([]);
 
   useLayoutEffect(() => {
     const c = new Color();
@@ -595,12 +686,15 @@ export function Traffic() {
         car.braking = target < car.speed - 0.4 || car.speed < 0.3;
         car.speed += (target - car.speed) * Math.min(1, delta * (target < car.speed ? 3.5 : 1.2));
         car.pos += lane.dir * car.speed * delta;
+        car.roll += car.speed * delta;
         if (car.pos > ROAD_HALF) car.pos -= ROAD_HALF * 2;
         if (car.pos < -ROAD_HALF) car.pos += ROAD_HALF * 2;
       }
     });
     byModel.forEach((list, mi) => {
       const parts = meshes.current[mi] ?? [];
+      const wheelParts = models[mi]!.wheels;
+      const wheelMeshes = wheels.current[mi] ?? [];
       list.forEach((car, i) => {
         const lane = LANES[car.li]!;
         const angle = lane.axis === 'x' ? (lane.dir === 1 ? Math.PI / 2 : -Math.PI / 2) : lane.dir === 1 ? 0 : Math.PI;
@@ -609,8 +703,13 @@ export function Traffic() {
         else _p.set(lane.at, 0.045, car.pos);
         _m.compose(_p, _q, _s.set(1, 1, 1));
         for (const mesh of parts) mesh?.setMatrixAt(i, _m);
+        wheelParts.forEach((w, wi) => {
+          _w.compose(w.center, _wq.setFromAxisAngle(AXLE, car.roll / w.radius), _s);
+          wheelMeshes[wi]?.setMatrixAt(i, _w.premultiply(_m));
+        });
       });
       for (const mesh of parts) if (mesh) mesh.instanceMatrix.needsUpdate = true;
+      for (const mesh of wheelMeshes) if (mesh) mesh.instanceMatrix.needsUpdate = true;
     });
   });
 
@@ -624,6 +723,19 @@ export function Traffic() {
               (meshes.current[mi] ??= [])[pi] = m;
             }}
             args={[p.geometry, p.material, Math.max(1, byModel[mi]!.length)]}
+            count={byModel[mi]!.length}
+            frustumCulled={false}
+          />
+        )),
+      )}
+      {models.map((model, mi) =>
+        model.wheels.map((w, wi) => (
+          <instancedMesh
+            key={`w${mi}-${wi}`}
+            ref={(m) => {
+              (wheels.current[mi] ??= [])[wi] = m;
+            }}
+            args={[w.geometry, w.material, Math.max(1, byModel[mi]!.length)]}
             count={byModel[mi]!.length}
             frustumCulled={false}
           />
