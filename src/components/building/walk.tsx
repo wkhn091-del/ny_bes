@@ -8,6 +8,7 @@ import { bindLookControls, clamp, fovFor, keyDirection, yawToward, type LookStat
 import { AVENUE_Z } from './city';
 import { ELEVATOR_ZONE, LOBBY_SPAWN, STREET_BOUNDS, streetObstacles } from './entrance';
 import { keepWalkable, obstaclesFor, type Layout } from './layout';
+import { NYC_TOP, inNyc } from './nyc';
 import { WALK } from './shared';
 
 export type Zone = number | 'street';
@@ -34,10 +35,11 @@ function streetFlight(from: Vector3): Vector3[] {
   const r = Math.hypot(from.x, from.z);
   const k = r > 300 ? 300 / r : 1;
   const behind = from.z < PLATE.z + 25;
-  const y = behind ? ROOF_Y + 25 : Math.max(from.y, CRUISE_Y);
+  const overBlocks = inNyc(from.x * k, from.z * k, 10);
+  const y = behind ? ROOF_Y + 25 : Math.max(from.y, overBlocks ? NYC_TOP + 10 : CRUISE_Y);
   const x = clamp(from.x * 0.5, -150, 150);
   const path = [new Vector3(from.x * k, y, from.z * k)];
-  if (behind) path.push(new Vector3(from.x * k, y, AVENUE_Z + 4));
+  if (behind || overBlocks) path.push(new Vector3(from.x * k, y, AVENUE_Z + 4));
   path.push(new Vector3(x, CRUISE_Y, AVENUE_Z + 4), new Vector3(0, 9, AVENUE_Z + 9), STREET_SPAWN.clone());
   return path;
 }

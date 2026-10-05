@@ -100,6 +100,8 @@ export type BuildingParts = {
   root: Object3D;
   desk: { geometry: BufferGeometry; material: Material } | null;
   exec: { geometry: BufferGeometry; material: Material }[];
+  /** The curtain-wall glass, so the scene can make it more reflective by day. */
+  facadeGlass: MeshStandardMaterial | null;
 };
 
 /** The tower's own glass draws after the interior glass layers, in a fixed order. */
@@ -116,6 +118,7 @@ export function prepareBuilding(scene: Object3D, cut: Cutaway, clip: Plane[]): B
   const restyled = new Map<string, Material>();
   let desk: BuildingParts['desk'] = null;
   const exec: BuildingParts['exec'] = [];
+  let facadeGlass: MeshStandardMaterial | null = null;
   const loose: Object3D[] = [];
 
   root.updateMatrixWorld(true);
@@ -145,6 +148,7 @@ export function prepareBuilding(scene: Object3D, cut: Cutaway, clip: Plane[]): B
           m.opacity = 0.2;
           m.depthWrite = false;
           m.envMapIntensity = 2.2;
+          facadeGlass = m;
           break;
         case 'Aluminum facade':
           m.color = new Color('#8d96a3');
@@ -174,5 +178,5 @@ export function prepareBuilding(scene: Object3D, cut: Cutaway, clip: Plane[]): B
     if (mat.transparent) mesh.renderOrder = FACADE_GLASS_ORDER;
   });
   loose.forEach((m) => m.removeFromParent());
-  return { root, desk, exec };
+  return { root, desk, exec, facadeGlass };
 }

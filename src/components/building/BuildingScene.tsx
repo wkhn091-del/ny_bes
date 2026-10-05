@@ -1,18 +1,21 @@
 'use client';
 
-import { Environment, Html, Lightformer, OrbitControls, Stars, useGLTF } from '@react-three/drei';
+import { Environment, Html, Lightformer, OrbitControls, useGLTF } from '@react-three/drei';
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { AdditiveBlending, CanvasTexture, Color, type Group, type PerspectiveCamera, type PointLight, type Points, SRGBColorSpace, Vector3 } from 'three';
+import { AdditiveBlending, CanvasTexture, Color, type Group, MeshBasicMaterial, type PerspectiveCamera, type PointLight, SRGBColorSpace, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { BUILDING_URL, CLEAR_HEIGHT, FLOOR_COUNT, PLATE, PROGRAM_COPY, ROOF_Y, floorY, prepareBuilding, programOf } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
 import { KIT_URL, extractKit } from '@/components/three/kit-model';
-import { City, NEIGHBOUR_AT, TRAFFIC_A_URL, TRAFFIC_B_URL } from './city';
+import { Atmosphere } from './atmosphere';
+import { City, NEIGHBOUR_AT, TRAFFIC_A_URL, TRAFFIC_B_URL, fadeByDay } from './city';
 import { Entrance, HERO_CAR_URL } from './entrance';
-import { Furnishing, Interior } from './interior';
+import { EXEC_URL, Furnishing, Interior, LOUNGE_URL } from './interior';
 import { buildLayout, type Layout } from './layout';
+import { NYC_URL, NycBlocks, liftOverNyc } from './nyc';
 import { CLIP, CLIP_PLANES, CUT, WALK } from './shared';
+import { SKY, applyDayTints, dayTint, type SkyMode } from './sky';
 import { WalkRig } from './walk';
 
 const CROWN = new Color('#a78bfa').multiplyScalar(2.2);
@@ -39,9 +42,16 @@ function Crown() {
   const sign = useMemo(() => drawSign(), []);
   useEffect(() => () => sign.dispose(), [sign]);
   const beams = useRef<Group>(null);
+  const beamMat = useMemo(
+    () => new MeshBasicMaterial({ color: '#b9a8ff', transparent: true, opacity: 0.07, blending: AdditiveBlending, depthWrite: false, side: 2, fog: false, clippingPlanes: CLIP_PLANES }),
+    [],
+  );
+  useEffect(() => () => beamMat.dispose(), [beamMat]);
   useFrame(({ clock }) => {
+    fadeByDay(beamMat, 1);
     const g = beams.current;
     if (!g) return;
+    g.visible = SKY.day < 0.95;
     g.children.forEach((b, i) => {
       b.rotation.z = Math.sin(clock.elapsedTime * 0.35 + i * 2.1) * 0.45;
       b.rotation.x = Math.cos(clock.elapsedTime * 0.27 + i * 1.3) * 0.3;
@@ -76,9 +86,8 @@ function Crown() {
       <group ref={beams}>
         {[-24, 24].map((bx) => (
           <group key={bx} position={[bx, ROOF_Y + 0.5, 0]}>
-            <mesh position={[0, 90, 0]}>
+            <mesh position={[0, 90, 0]} material={beamMat}>
               <cylinderGeometry args={[6, 0.6, 180, 24, 1, true]} />
-              <meshBasicMaterial color="#b9a8ff" transparent opacity={0.07} blending={AdditiveBlending} depthWrite={false} side={2} fog={false} clippingPlanes={CLIP_PLANES} />
             </mesh>
           </group>
         ))}
@@ -276,7 +285,10 @@ function CameraRig({ selected, walking }: { selected: number | null; walking: bo
     }
     const f = fly.current;
     c.autoRotate = selected === null && !f.touched && !f.active;
-    if (!f.active) return;
+    if (!f.active) {
+      liftOverNyc(state.camera.position);
+      return;
+    }
     goalFor(selected, state.size.width / state.size.height, goalPos, goalTarget);
     const cam = state.camera;
     if (f.snap) {
@@ -322,9 +334,18 @@ function Neighbour() {
   return <primitive object={bank} position={NEIGHBOUR_AT} />;
 }
 
+function setGlassOpacity(m: { opacity: number } | null, opacity: number) {
+  if (m) m.opacity = opacity;
+}
+
 function Building({ selected, layout }: { selected: number | null; layout: Layout }) {
   const { scene } = useGLTF(BUILDING_URL, DRACO_PATH);
   const parts = useMemo(() => prepareBuilding(scene, CUT, CLIP_PLANES), [scene]);
+  const glassTint = useMemo(() => (parts.facadeGlass ? [dayTint(parts.facadeGlass, '#2b4360', '#6f8fb3')] : []), [parts]);
+  useFrame(() => {
+    applyDayTints(glassTint);
+    setGlassOpacity(parts.facadeGlass, WALK.inside ? 0.2 : 0.2 + 0.4 * SKY.day);
+  });
   return (
     <group>
       <primitive object={parts.root} />
@@ -336,18 +357,6 @@ function Building({ selected, layout }: { selected: number | null; layout: Layou
       )}
     </group>
   );
-}
-
-/**
- * Still stars, always drawn before the tower's glass: twinkling or a changing draw order makes
- * them flash white through the facade as the camera moves.
- */
-function SkyStars() {
-  const ref = useRef<Points>(null);
-  useEffect(() => {
-    if (ref.current) ref.current.renderOrder = -20;
-  }, []);
-  return <Stars ref={ref} radius={1400} depth={200} count={1600} factor={7} fade speed={0} />;
 }
 
 function Ready({ onReady }: { onReady: () => void }) {
@@ -362,6 +371,7 @@ export default function BuildingScene({
   onSelect,
   onReady,
   onElevator,
+  skyMode,
 }: {
   active: boolean;
   selected: number | null;
@@ -369,6 +379,7 @@ export default function BuildingScene({
   onSelect: (i: number) => void;
   onReady: () => void;
   onElevator: (at: boolean) => void;
+  skyMode: SkyMode;
 }) {
   const layout = useMemo(() => buildLayout(), []);
   return (
@@ -383,13 +394,7 @@ export default function BuildingScene({
     >
       <color attach="background" args={['#060912']} />
       <fog attach="fog" args={['#0b1020', 320, 1200]} />
-      <hemisphereLight args={['#5a6c9c', '#07080c', 0.55]} />
-      <directionalLight position={[-220, 300, -160]} intensity={0.55} color="#b8c8ff" />
-      <SkyStars />
-      <mesh position={[-600, 520, -1100]}>
-        <sphereGeometry args={[24, 32, 16]} />
-        <meshBasicMaterial color="#f4f1e6" toneMapped={false} fog={false} />
-      </mesh>
+      <Atmosphere mode={skyMode} />
       <Environment resolution={128} frames={1}>
         <color attach="background" args={['#04060c']} />
         <Lightformer form="rect" intensity={1.2} color="#ffd9a8" position={[0, 2, -10]} scale={[20, 2, 1]} />
@@ -399,6 +404,9 @@ export default function BuildingScene({
       </Environment>
       <Suspense fallback={null}>
         <City />
+      </Suspense>
+      <Suspense fallback={null}>
+        <NycBlocks />
       </Suspense>
       <Suspense fallback={null}>
         <Building selected={selected} layout={layout} />
@@ -425,3 +433,6 @@ useGLTF.preload(KIT_URL, DRACO_PATH);
 useGLTF.preload(TRAFFIC_A_URL, DRACO_PATH);
 useGLTF.preload(TRAFFIC_B_URL, DRACO_PATH);
 useGLTF.preload(HERO_CAR_URL, DRACO_PATH);
+useGLTF.preload(NYC_URL, DRACO_PATH);
+useGLTF.preload(EXEC_URL, DRACO_PATH);
+useGLTF.preload(LOUNGE_URL, DRACO_PATH);

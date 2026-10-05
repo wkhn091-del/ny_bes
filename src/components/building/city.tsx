@@ -26,7 +26,9 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { DRACO_PATH } from '@/components/three/desk-model';
+import { inNyc } from './nyc';
 import { WALK, seededRandom } from './shared';
+import { DAY_UNIFORM, SKY, applyDayTints, dayTint } from './sky';
 
 export const AVENUE_Z = 52;
 export const AVENUE_HALF = 8;
@@ -64,11 +66,19 @@ function cityMaterial(color: string, windowGain: number): MeshStandardMaterial {
   vCityPos = (cityModel * vec4(transformed, 1.0)).xyz;
   vCityNormal = normalize(mat3(cityModel) * objectNormal);`,
       );
+    shader.uniforms.uDay = DAY_UNIFORM;
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vCityPos;\nvarying vec3 vCityNormal;\nvarying float vCitySeed;\nuniform float uWindow;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vCityPos;\nvarying vec3 vCityNormal;\nvarying float vCitySeed;\nuniform float uWindow;\nuniform float uDay;')
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
+  vec3 nightDiffuse = diffuseColor.rgb;
+  float kind = fract(vCitySeed * 7.13);
+  vec3 dayWall = kind < 0.3 ? vec3(0.62, 0.57, 0.49)
+    : kind < 0.5 ? vec3(0.44, 0.27, 0.21)
+    : kind < 0.75 ? vec3(0.42, 0.43, 0.45)
+    : vec3(0.2, 0.28, 0.37);
+  vec3 dayColor = abs(vCityNormal.y) < 0.5 ? dayWall : vec3(0.28, 0.29, 0.31);
   if (abs(vCityNormal.y) < 0.5) {
     float u = abs(vCityNormal.x) > abs(vCityNormal.z) ? vCityPos.z : vCityPos.x;
     vec2 cell = vec2(u / 2.7, vCityPos.y / 3.6);
@@ -86,12 +96,15 @@ function cityMaterial(color: string, windowGain: number): MeshStandardMaterial {
     vec3 wc = mix(warm, cool, step(0.78, fract(r * 7.31)));
     vec3 sharpGlow = wc * win * lit * (0.45 + 0.55 * fract(r * 13.1));
     vec3 averageGlow = mix(warm, cool, 0.22) * 0.13;
-    totalEmissiveRadiance += mix(sharpGlow, averageGlow, blur) * uWindow;
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.02, 0.025, 0.04), mix(win * (1.0 - lit), 0.23, blur));
-  }`,
+    totalEmissiveRadiance += mix(sharpGlow, averageGlow, blur) * uWindow * (1.0 - uDay);
+    nightDiffuse = mix(nightDiffuse, vec3(0.02, 0.025, 0.04), mix(win * (1.0 - lit), 0.23, blur));
+    vec3 pane = vec3(0.07, 0.1, 0.15) + 0.05 * fract(r * 5.3);
+    dayColor = mix(dayWall, pane, mix(win, 0.42, blur));
+  }
+  diffuseColor.rgb = mix(nightDiffuse, dayColor, uDay);`,
       );
   };
-  m.customProgramCacheKey = () => `spacehub-city-${windowGain}`;
+  m.customProgramCacheKey = () => `spacehub-city-day-${windowGain}`;
   return m;
 }
 
@@ -105,7 +118,7 @@ function inReserved(x: number, z: number, pad: number): boolean {
   if (Math.abs(x) < 52 + pad && z > -32 - pad && z < 44 + pad) return true;
   if (Math.abs(x - NEIGHBOUR_AT[0]) < 32 + pad && Math.abs(z - NEIGHBOUR_AT[2]) < 28 + pad) return true;
   if (z < RIVER.z0 + 10 && z > RIVER.z1 - 10) return true;
-  return false;
+  return inNyc(x, z, pad + 4);
 }
 
 /** Manhattan-style towers: low blocks around the tower, tall setback towers beyond, a lower borough across the river. */
@@ -452,13 +465,22 @@ function skylineRingTexture(): CanvasTexture {
 /** A painted ring of far skyline beyond the fog, so the city never ends at the horizon. */
 function FarSkyline() {
   const tex = useMemo(() => skylineRingTexture(), []);
+  const mat = useRef<MeshBasicMaterial>(null);
   useEffect(() => () => tex.dispose(), [tex]);
+  useFrame(() => fadeByDay(mat.current, 0.88));
   return (
     <mesh position={[0, 95, 0]} renderOrder={-10}>
       <cylinderGeometry args={[1150, 1150, 230, 64, 1, true]} />
-      <meshBasicMaterial map={tex} transparent side={BackSide} fog={false} toneMapped={false} depthWrite={false} />
+      <meshBasicMaterial ref={mat} map={tex} transparent side={BackSide} fog={false} toneMapped={false} depthWrite={false} />
     </mesh>
   );
+}
+
+/** Night-only glow (the painted far skyline, searchlights) thins out as daylight comes up. */
+export function fadeByDay(m: { opacity: number; userData: Record<string, unknown> } | null, by: number) {
+  if (!m) return;
+  const base = (m.userData.baseOpacity as number | undefined) ?? (m.userData.baseOpacity = m.opacity);
+  m.opacity = base * (1 - by * SKY.day);
 }
 
 const LAMP_HEAD = new Color('#ffd9a0').multiplyScalar(2.4);
@@ -498,29 +520,41 @@ function Streets() {
     setInstances(lamps.current, data.lampList);
     setInstances(heads.current, data.headList);
   }, [data]);
+  const { mats, tints } = useMemo(() => {
+    const mats = {
+      ground: new MeshStandardMaterial({ roughness: 1 }),
+      plaza: new MeshStandardMaterial({ roughness: 0.55, metalness: 0.15 }),
+      road: new MeshStandardMaterial({ roughness: 0.45, metalness: 0.25 }),
+      curb: new MeshStandardMaterial({ roughness: 0.8 }),
+    };
+    const tints = [
+      dayTint(mats.ground, '#0a0c11', '#46474a'),
+      dayTint(mats.plaza, '#1b1d23', '#9a958d'),
+      dayTint(mats.road, '#121419', '#3c3e42'),
+      dayTint(mats.curb, '#2a2c33', '#a29d94'),
+    ];
+    return { mats, tints };
+  }, []);
+  useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
+  useFrame(() => applyDayTints(tints));
 
   return (
     <group>
-      <mesh rotation-x={-Math.PI / 2} position={[0, -0.06, 0]}>
+      <mesh rotation-x={-Math.PI / 2} position={[0, -0.06, 0]} material={mats.ground}>
         <planeGeometry args={[2400, 2400]} />
-        <meshStandardMaterial color="#0a0c11" roughness={1} />
       </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0, (AVENUE_Z - AVENUE_HALF - 40) / 2]}>
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0, (AVENUE_Z - AVENUE_HALF - 40) / 2]} material={mats.plaza}>
         <planeGeometry args={[110, AVENUE_Z - AVENUE_HALF + 40]} />
-        <meshStandardMaterial color="#1b1d23" roughness={0.55} metalness={0.15} />
       </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0.02, AVENUE_Z]}>
+      <mesh rotation-x={-Math.PI / 2} position={[0, 0.02, AVENUE_Z]} material={mats.road}>
         <planeGeometry args={[ROAD_HALF * 2, AVENUE_HALF * 2]} />
-        <meshStandardMaterial color="#121419" roughness={0.45} metalness={0.25} />
       </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[SIDE_X, 0.045, 0]}>
+      <mesh rotation-x={-Math.PI / 2} position={[SIDE_X, 0.045, 0]} material={mats.road}>
         <planeGeometry args={[10, ROAD_HALF * 2]} />
-        <meshStandardMaterial color="#121419" roughness={0.45} metalness={0.25} />
       </mesh>
       {[AVENUE_Z - AVENUE_HALF - 1.6, AVENUE_Z + AVENUE_HALF + 1.6].map((z) => (
-        <mesh key={z} position={[0, 0.09, z]}>
+        <mesh key={z} position={[0, 0.09, z]} material={mats.curb}>
           <boxGeometry args={[ROAD_HALF * 2, 0.18, 3.2]} />
-          <meshStandardMaterial color="#2a2c33" roughness={0.8} />
         </mesh>
       ))}
       <instancedMesh ref={dashes} args={[undefined, undefined, data.dashList.length]}>

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { BuildingShowcase } from '@/components/building/BuildingShowcase';
 import { ButtonLink } from '@/components/ui/Button';
 
@@ -25,7 +26,11 @@ export default function BuildingPage() {
       </div>
       <BuildingShowcase className="h-[70svh] min-h-[420px] sm:h-[min(82vh,800px)] sm:min-h-[560px]" />
       <p className="mt-3 text-xs text-muted">
-        ההדמיה ממחישה את סוגי החללים. הסניפים שלנו נמצאים בבניינים שונים, והפרטים של כל סניף מופיעים בעמוד שלו.
+        ההדמיה ממחישה את סוגי החללים. הסניפים שלנו נמצאים בבניינים שונים, והפרטים של כל סניף מופיעים בעמוד שלו. חלק
+        מהמודלים (רחובות ניו יורק ורהיטים) הם של יוצרים אחרים, ברישיון CC BY ·{' '}
+        <Link href="/credits" className="underline hover:text-fg">
+          קרדיטים
+        </Link>
       </p>
     </section>
   );

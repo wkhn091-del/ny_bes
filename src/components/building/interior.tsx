@@ -2,7 +2,7 @@
 
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   type BufferGeometry,
   Color,
@@ -32,7 +32,10 @@ import {
   deskTopOffset,
   type Layout,
 } from './layout';
+import { RealisticFurniture, SpacePhotos } from './realistic';
 import { nameScreenTexture } from './screens';
+
+export { EXEC_URL, LOUNGE_URL } from './realistic';
 import { CLIP_PLANES, ONE, composeItem, seededRandom, type Item } from './shared';
 
 /** Box instances for every item, optionally skipping one floor (where detailed models take over). */
@@ -125,7 +128,7 @@ const BOTTLE_COLORS = ['#ffb35c', '#7fd1ff', '#c4b5fd', '#ff7a7a', '#9dffb0'];
 const BOOK_COLORS = ['#6d28d9', '#e4d6bd', '#1f2937', '#a78bfa', '#b45309', '#f5f5f4', '#334155', '#0f766e'];
 
 /** Plants, phone booths, coffee bar, bookshelves and rugs: the lived-in layer on every floor. */
-function FitOut({ layout }: { layout: Layout }) {
+function FitOut({ layout, selected }: { layout: Layout; selected: number | null }) {
   const g = useMemo(
     () => ({
       pot: new CylinderGeometry(0.24, 0.18, 0.5, 14).translate(0, 0.25, 0),
@@ -148,7 +151,7 @@ function FitOut({ layout }: { layout: Layout }) {
     [],
   );
   useEffect(() => () => Object.values(mats).forEach((x) => x.dispose()), [mats]);
-  const plants = useMemo(() => layout.plants.map(scaled), [layout]);
+  const plants = useMemo(() => layout.plants.filter((it) => it.f !== selected).map(scaled), [layout, selected]);
   const shelvesBooks = useMemo(() => {
     const rnd = seededRandom(9);
     const out: (Item & { c: string })[] = [];
@@ -221,7 +224,7 @@ function FitOut({ layout }: { layout: Layout }) {
       <ColoredBoxes items={shelvesBooks} />
 
       {RUG_COLORS.map((c, k) => (
-        <Boxes key={c} items={layout.rugs.filter((r) => r.k === k)} size={[9.5, 0.012, 4.8]} y={0.006}>
+        <Boxes key={c} items={layout.rugs.filter((r) => r.k === k)} size={[9.5, 0.012, 4.8]} y={0.006} exclude={selected}>
           <meshStandardMaterial color={c} roughness={1} clippingPlanes={CLIP_PLANES} />
         </Boxes>
       ))}
@@ -377,13 +380,13 @@ export function Interior({
       <Boxes items={layout.screens} size={SCREEN} y={1.5}>
         <meshBasicMaterial color={SCREEN_GLOW} toneMapped={false} clippingPlanes={CLIP_PLANES} />
       </Boxes>
-      <Boxes items={layout.sofas} size={SOFA} y={0.38}>
+      <Boxes items={layout.sofas} size={SOFA} y={0.38} exclude={selected}>
         <meshStandardMaterial color="#4c3f7a" roughness={0.85} clippingPlanes={CLIP_PLANES} />
       </Boxes>
       <Boxes items={layout.lounge} size={LOUNGE_TABLE} y={0.4} exclude={selected}>
         <meshStandardMaterial color="#6b5a45" roughness={0.6} clippingPlanes={CLIP_PLANES} />
       </Boxes>
-      <FitOut layout={layout} />
+      <FitOut layout={layout} selected={selected} />
       <CeilingLights panels={layout.panels} live selected={selected} />
     </group>
   );
@@ -413,7 +416,6 @@ export function Furnishing({ selected, layout, builtDesk }: { selected: number; 
     const chairs = on(layout.chairs);
     const deskChairs = chairs.filter((c) => !c.meet).map((c) => turn(c, KIT_CHAIR_YAW));
     const desks = on(layout.desks);
-    const exec = on(layout.exec);
     return {
       ferli: desks.filter((d) => d.k !== 2 || !builtDesk).map(deskTopOffset),
       built: desks.filter((d) => d.k === 2 && builtDesk),
@@ -422,10 +424,6 @@ export function Furnishing({ selected, layout, builtDesk }: { selected: number; 
       chairsLeather: deskChairs.filter((c) => c.k === 2),
       meetChairs: chairs.filter((c) => c.meet).map((c) => turn(c, KIT_CHAIR_YAW)),
       tables: on(layout.tables),
-      woodDesks: exec.map((it) => turn(it, Math.PI / 2)),
-      managerChairs: exec.map((it) => turn({ ...it, z: it.z + (it.r ? 0.85 : -0.85) }, KIT_CHAIR_YAW)),
-      books: exec.map((it) => ({ ...it, x: it.x + 0.35, y: 0.74 })),
-      lounge: on(layout.lounge),
     };
   }, [layout, selected, builtDesk]);
   const p = kit.parts;
@@ -438,10 +436,12 @@ export function Furnishing({ selected, layout, builtDesk }: { selected: number; 
       <KitInstances parts={p.leatherChair} items={set.chairsLeather} />
       <KitInstances parts={p.managerChair} items={set.meetChairs} />
       <KitInstances parts={p.conference} items={set.tables} />
-      <KitInstances parts={p.woodDesk} items={set.woodDesks} />
-      <KitInstances parts={p.managerChair} items={set.managerChairs} />
-      <KitInstances parts={p.books} items={set.books} />
-      <KitInstances parts={p.flatiron} items={set.lounge} />
+      <Suspense fallback={null}>
+        <RealisticFurniture layout={layout} selected={selected} Instances={KitInstances} />
+      </Suspense>
+      <Suspense fallback={null}>
+        <SpacePhotos layout={layout} selected={selected} />
+      </Suspense>
     </group>
   );
 }

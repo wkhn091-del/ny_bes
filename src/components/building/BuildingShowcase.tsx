@@ -1,16 +1,29 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { ArrowRight, ArrowUpDown, Box, DoorOpen, Footprints, Hand, LogOut, Maximize2, Minimize2 } from 'lucide-react';
+import { ArrowRight, ArrowUpDown, Box, Clock, DoorOpen, Footprints, Hand, LogOut, Maximize2, Minimize2, Moon, Music, Sun, VolumeX } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLOOR_COUNT, PROGRAM_COPY, programOf } from '@/components/three/building-model';
 import { use3DCapable } from '@/components/three/capability';
 import { useFullscreen, useInView } from '@/components/three/stage-hooks';
+import { AmbientMusic } from './ambient-music';
+import { daylightOf, sunPosition, type SkyMode } from './sky';
 
 const BuildingScene = dynamic(() => import('./BuildingScene'), { ssr: false });
+
+const SKY_MODES: { mode: SkyMode; label: string; Icon: typeof Sun }[] = [
+  { mode: 'auto', label: 'תאורה לפי השעה עכשיו בישראל', Icon: Clock },
+  { mode: 'day', label: 'יום', Icon: Sun },
+  { mode: 'night', label: 'לילה', Icon: Moon },
+];
+
+function moodFor(mode: SkyMode): 'day' | 'night' {
+  if (mode !== 'auto') return mode;
+  return daylightOf(sunPosition(new Date()).alt) > 0.5 ? 'day' : 'night';
+}
 
 export const BUILDING_POSTER = '/images/renders/building-poster.webp';
 
@@ -27,10 +40,29 @@ export function BuildingShowcase({ className }: { className?: string }) {
   const [walking, setWalking] = useState(false);
   const [elevatorTrips, setElevatorTrips] = useState(0);
   const [atElevator, setAtElevator] = useState(false);
+  const [skyMode, setSkyMode] = useState<SkyMode>('auto');
+  const [music, setMusic] = useState(false);
+  const player = useRef<AmbientMusic | null>(null);
   const onReady = useCallback(() => setReady(true), []);
   const onElevator = useCallback((at: boolean) => setAtElevator(at), []);
   const { isFull, toggle, supported } = useFullscreen(stage);
   if (capable && near && !mounted) setMounted(true);
+
+  const toggleMusic = useCallback(() => {
+    player.current ??= new AmbientMusic();
+    if (music) player.current.stop();
+    else void player.current.start(moodFor(skyMode));
+    setMusic(!music);
+  }, [music, skyMode]);
+
+  useEffect(() => {
+    if (!music) return;
+    player.current?.setMood(moodFor(skyMode));
+    const id = window.setInterval(() => player.current?.setMood(moodFor(skyMode)), 60_000);
+    return () => window.clearInterval(id);
+  }, [music, skyMode]);
+
+  useEffect(() => () => player.current?.dispose(), []);
 
   const choose = useCallback(
     (i: number | null) => {
@@ -94,7 +126,7 @@ export function BuildingShowcase({ className }: { className?: string }) {
           className={clsx('absolute inset-0 transition-opacity duration-(--dur-reveal) ease-(--ease-out)', ready ? 'opacity-100' : 'opacity-0')}
           aria-hidden="true"
         >
-          <BuildingScene active={near} selected={selected} walking={walking} onSelect={choose} onReady={onReady} onElevator={onElevator} />
+          <BuildingScene active={near} selected={selected} walking={walking} onSelect={choose} onReady={onReady} onElevator={onElevator} skyMode={skyMode} />
         </div>
       )}
 
@@ -111,6 +143,35 @@ export function BuildingShowcase({ className }: { className?: string }) {
         >
           {isFull ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}
         </button>
+      )}
+      {capable && ready && (
+        <div className="absolute right-3 top-14 flex items-center gap-1.5 sm:right-14 sm:top-3">
+          <div role="group" aria-label="תאורה" className={clsx(chip, 'flex items-center gap-0.5 p-0.5')}>
+            {SKY_MODES.map(({ mode, label, Icon }) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setSkyMode(mode)}
+                aria-pressed={skyMode === mode}
+                aria-label={label}
+                title={label}
+                className={clsx('rounded-full p-1.5 transition-colors', skyMode === mode ? 'bg-white text-zinc-950' : 'text-white/80 hover:text-white')}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={toggleMusic}
+            aria-pressed={music}
+            aria-label={music ? 'כיבוי מוזיקת רקע' : 'הפעלת מוזיקת רקע'}
+            title={music ? 'כיבוי מוזיקת רקע' : 'הפעלת מוזיקת רקע'}
+            className={clsx(chip, 'p-2 transition-colors', music ? 'bg-accent text-accent-fg' : 'hover:bg-black/75')}
+          >
+            {music ? <Music className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
+          </button>
+        </div>
       )}
       {capable && ready && selected === null && !walking && (
         <span className={clsx(chip, 'pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-2xs text-white/90 sm:text-xs')}>

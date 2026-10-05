@@ -33,6 +33,9 @@ export const BOOTH = [1.1, 2.3, 1.1] as const;
 export const BAR = [6, 1.05, 0.7] as const;
 export const SHELF = [0.4, 2.1, 2.4] as const;
 export const PLANT_FOOTPRINT = 0.7;
+/** Walk-blocking footprints of the realistic sets: the leather lounge and an executive desk with its chair. */
+export const LOUNGE_SET = [5, 4.5] as const;
+export const EXEC_SET = [2.8, 1.9] as const;
 export const deskTopOffset = (it: Item): Item => ({ ...it, z: it.z + (it.s ?? 1) * 0.3 });
 
 /** Names shown on the desk monitors, cycled desk by desk. */
@@ -112,7 +115,7 @@ export function buildLayout(): Layout {
             glassRoom(f, x, 6, side, 5, x + 12 > wx1 + 0.01);
             const ex = offColumns(x + 3, 1.4);
             L.exec.push({ f, x: ex, z: side * 12.3, r: side === -1 ? 0 : Math.PI });
-            L.monitors.push({ f, x: ex, z: side * 12.75, s: side, k: screen++ % SCREEN_NAMES.length });
+            L.monitors.push({ f, x: ex, z: side * 11.8, s: side, k: screen++ % SCREEN_NAMES.length });
             L.plants.push({ f, x: offColumns(x + 0.7, 1), z: side * 14.1, s: 0.8 + rnd() * 0.3 });
           }
         }
@@ -178,8 +181,8 @@ export function obstaclesFor(layout: Layout, f: number): { rects: Rect[]; bounds
   for (const d of on(layout.desks).map(deskTopOffset)) rects.push(rectAt(d.x, d.z, DESK_TOP[0], DESK_TOP[2]));
   for (const t of on(layout.tables)) rects.push(rectAt(t.x, t.z, TABLE[0], TABLE[2]));
   for (const so of on(layout.sofas)) rects.push(rectAt(so.x, so.z, SOFA[0], SOFA[2]));
-  for (const l of on(layout.lounge)) rects.push(rectAt(l.x, l.z, LOUNGE_TABLE[0], LOUNGE_TABLE[2]));
-  for (const e of on(layout.exec)) rects.push(rectAt(e.x, e.z, 1.4, 1.4));
+  for (const l of on(layout.lounge)) rects.push(rectAt(l.x, l.z, LOUNGE_SET[0], LOUNGE_SET[1]));
+  for (const e of on(layout.exec)) rects.push(rectAt(e.x, e.z, EXEC_SET[0], EXEC_SET[1]));
   for (const p of on(layout.plants)) rects.push(rectAt(p.x, p.z, PLANT_FOOTPRINT, PLANT_FOOTPRINT));
   for (const b of on(layout.booths)) rects.push(rectAt(b.x, b.z, BOOTH[0], BOOTH[2]));
   for (const b of on(layout.bars)) rects.push(rectAt(b.x, b.z, BAR[0], BAR[2]));

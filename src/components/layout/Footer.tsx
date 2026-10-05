@@ -99,6 +99,11 @@ export function Footer({ catalog }: { catalog: Catalog }) {
                   </Link>
                 </li>
               ))}
+              <li>
+                <Link href="/credits" className="text-zinc-400 transition-colors hover:text-white">
+                  קרדיטים
+                </Link>
+              </li>
             </ul>
           </nav>
 
