@@ -10,7 +10,7 @@ export const CREDITS: Credit[] = [
     authorUrl: 'https://sketchfab.com/mortalityrexotable',
     source: 'https://sketchfab.com/3d-models/new-york-city-4737b6ee73ed4634ad5b414558fdfa45',
     ...CC_BY_4,
-    use: 'בלוקי הרחובות והבניינים סביב המגדל בסיור התלת־ממדי (מוקטן ודחוס לאתר, עם תאורת חלונות בלילה)',
+    use: 'בלוקי הרחובות והבניינים סביב המגדל בסיור התלת־ממדי, והעצים ברחבה ולאורך השדרה (עץ אחד מהדגם, משוכפל; דחוס לאתר, עם תאורת חלונות בלילה)',
   },
   {
     title: 'Minimalistic Modern Office',

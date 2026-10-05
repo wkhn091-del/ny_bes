@@ -3,11 +3,11 @@
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { CanvasTexture, Color, type Group, type InstancedMesh, Matrix4, type Mesh, MeshStandardMaterial, SRGBColorSpace, ShaderMaterial } from 'three';
+import { CanvasTexture, Color, DoubleSide, type Group, type InstancedMesh, Matrix4, type Mesh, MeshStandardMaterial, SRGBColorSpace, ShaderMaterial } from 'three';
 import { COLUMNS, COLUMN_SIZE, CORE, DOOR, ELEVATOR, FRONT_PIERS, LOBBY, PLINTH } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
 import type { KitPart } from '@/components/three/kit-model';
-import { AVENUE_HALF, AVENUE_Z, CROSSWALK } from './city';
+import { AVENUE_HALF, AVENUE_Z, CROSSWALK, SIDE_X } from './city';
 import { ModelInstances } from './interior';
 import { rectAt, type Rect } from './layout';
 import { LOUNGE_URL, disposeGroups, groupsOf } from './realistic';
@@ -25,6 +25,8 @@ export const PLANTS_URL = '/models/lobby-plants.glb';
 export const FOUNTAIN_URL = '/models/lobby-fountain.glb';
 /** "Elevator with Animation LOWPOLY" by EFX (CC-BY-4.0): only the call buttons and floor display. */
 export const ELEVATOR_URL = '/models/lobby-elevator.glb';
+/** One street tree cut from "New York City" by golukumar (CC-BY-4.0), see nyc.tsx. */
+export const TREE_URL = '/models/nyc-tree.glb';
 
 const CANOPY = { x: 7, z0: 15, z1: 27, y: 6.3 };
 const CANOPY_POSTS: [number, number][] = [
@@ -43,6 +45,13 @@ const TREES: [number, number][] = [
   [27, 32],
   [27, 40],
 ];
+/** Street trees on both avenue sidewalks, midway between the lamps, clear of the crossings and the junction. */
+const AVENUE_TREES: [number, number][] = Array.from({ length: 23 }, (_, i) => -287 + i * 26)
+  .filter((x) => Math.abs(x) > 8 && Math.abs(x - SIDE_X) > 16)
+  .flatMap((x) => [
+    [x, AVENUE_Z - AVENUE_HALF - 2.1] as [number, number],
+    [x, AVENUE_Z + AVENUE_HALF + 2.1] as [number, number],
+  ]);
 const RECEPTION = { x: -13, z: 3, w: 6.6, d: 1.5 };
 const HEDGES: [number, number][] = [
   [-27, 28],
@@ -99,6 +108,7 @@ export function streetObstacles(): Rect[] {
   for (const [x, z] of CANOPY_POSTS) rects.push(rectAt(x, z, 0.5, 0.5));
   for (const z of RUNWAY_ZS) for (const x of [-RUNWAY_X, RUNWAY_X]) rects.push(rectAt(x, z, 0.3, 0.3));
   for (const [x, z] of TREES) rects.push(rectAt(x, z, 1.6, 1.6));
+  for (const [x, z] of AVENUE_TREES) if (Math.abs(x) < 40) rects.push(rectAt(x, z, 0.6, 0.6));
   for (const [x, z] of [...LOBBY_PLANTS, ...DOOR_PLANTS]) rects.push(rectAt(x, z, 0.8, 0.8));
   for (const [x, z] of HEDGES) rects.push(rectAt(x, z, 0.9, 2.6));
   for (const [x, z] of [...SIGNAL_POLES, ...STREET_LAMPS]) rects.push(rectAt(x, z, 0.3, 0.3));
@@ -367,7 +377,7 @@ function Plants() {
   const items = useMemo(() => {
     const at = (list: [number, number][], y: number, s = 1): Item[] => list.map(([x, z]) => ({ f: -1, x, z, y, sx: s, sy: s, sz: s }));
     return {
-      cones: [...at(LOBBY_PLANTS, LOBBY.floor), ...at(TREES, 0.7, 1.7)],
+      cones: at(LOBBY_PLANTS, LOBBY.floor),
       balls: at(DOOR_PLANTS, LOBBY.floor, 0.9),
       hedges: at(HEDGES, 0),
     };
@@ -431,8 +441,26 @@ function HeroCar() {
 const TREE_LED = new Color('#ffd9a0').multiplyScalar(1.4);
 
 function Trees() {
+  const { scene } = useGLTF(TREE_URL, DRACO_PATH);
+  const g = useMemo(() => {
+    const groups = groupsOf(scene);
+    for (const p of groups.Tree ?? []) {
+      if (!/foliage/i.test(p.material.name)) continue;
+      p.material.alphaTest = 0.22;
+      p.material.side = DoubleSide;
+    }
+    return groups;
+  }, [scene]);
+  useEffect(() => () => disposeGroups(g), [g]);
+  const items = useMemo(() => {
+    const turn = (x: number, z: number) => (Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % Math.PI;
+    const at = (list: [number, number][], y: number, s: number): Item[] =>
+      list.map(([x, z]) => ({ f: -1, x, z, y, r: turn(x, z), sx: s, sy: s, sz: s }));
+    return [...at(TREES, 0.72, 0.6), ...at(AVENUE_TREES, 0.14, 0.55)];
+  }, []);
   return (
     <group>
+      <PlantParts parts={g.Tree} items={items} />
       {TREES.map(([x, z]) => (
         <group key={`${x}:${z}`} position={[x, 0, z]}>
           <mesh position={[0, 0.35, 0]}>

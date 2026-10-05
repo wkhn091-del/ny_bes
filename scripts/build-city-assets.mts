@@ -148,7 +148,7 @@ async function build(file: string, out: string, opts: BuildOpts) {
   const only = process.argv.find((a) => a.startsWith('--only='))?.slice(7);
   if (only && !out.startsWith(only)) return;
   const reader = await io();
-  const doc = await reader.read(join(SRC, file));
+  const doc = await reader.read(resolve(SRC, file));
   await doc.transform(metalRough());
   await bake(doc);
   if (opts.dropMaterials) {
@@ -198,6 +198,14 @@ async function build(file: string, out: string, opts: BuildOpts) {
 
 async function main() {
   if (!process.argv.includes('--skip-nyc')) await build('new_york_city.glb', 'nyc-block.glb', { maxTexture: 1024, dropTransmission: true });
+  const oneTree = (x: number, _y: number, z: number) => Math.abs(x + 141.6) < 5 && Math.abs(z - 71.8) < 5;
+  await build(join(OUT, 'nyc-block.glb'), 'nyc-tree.glb', {
+    maxTexture: 512,
+    keep: [
+      { match: /^Object_40$/, as: 'Tree', crop: oneTree },
+      { match: /^Object_38$/, as: 'Tree', crop: oneTree },
+    ],
+  });
   await build('minimalistic_modern_office.glb', 'office-exec.glb', {
     maxTexture: 1024,
     keep: [
