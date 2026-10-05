@@ -6,10 +6,11 @@ import { type PerspectiveCamera, Vector3 } from 'three';
 import { LOBBY, PLATE, ROOF_Y, floorY, groundY } from '@/components/three/building-model';
 import { bindLookControls, clamp, fovFor, keyDirection, yawToward, type LookState } from '@/components/three/first-person';
 import { AVENUE_Z } from './city';
-import { ELEVATOR_ZONE, LOBBY_SPAWN, STREET_BOUNDS, streetObstacles } from './entrance';
+import { ELEVATOR_ZONE, ENTRANCE_TAP, LOBBY_SPAWN, STREET_BOUNDS, elevatorRoute, streetObstacles } from './entrance';
 import { keepWalkable, obstaclesFor, type Layout } from './layout';
 import { NYC_TOP, inNyc } from './nyc';
 import { WALK } from './shared';
+import { WALK_SIGNAL } from './walk-signal';
 
 export type Zone = number | 'street';
 
@@ -51,7 +52,10 @@ function setTouchAction(el: HTMLElement, value: string) {
   el.style.touchAction = value;
 }
 
-type WalkNav = LookState & { pos: Vector3; path: Vector3[]; snap: boolean; flying: boolean; zone: Zone | null; atElevator: boolean };
+type WalkNav = LookState & { pos: Vector3; path: Vector3[]; snap: boolean; flying: boolean; zone: Zone | null; atElevator: boolean; auto: boolean };
+
+/** Inside a cabin, facing out through its doors. */
+const FACE_OUT = Math.PI;
 
 /**
  * First-person walk. On a floor: glides in through the facade. In the street: swoops down to the
@@ -73,6 +77,7 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
     flying: false,
     zone: null,
     atElevator: false,
+    auto: false,
   });
   const v = useMemo(() => ({ dir: new Vector3(), look: new Vector3(), before: new Vector3() }), []);
 
@@ -131,8 +136,30 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
     else look.set(ARRIVAL_LOOK.x, floorY(zone) + EYE - 0.5, ARRIVAL_LOOK.z);
 
     const p = n.pos;
+    if (WALK_SIGNAL.goElevator && !street) WALK_SIGNAL.goElevator = false;
+    if (WALK_SIGNAL.goElevator && !n.flying) {
+      WALK_SIGNAL.goElevator = false;
+      n.keys.clear();
+      n.path = elevatorRoute(p.x, p.z).map((q) => new Vector3(q.x, 0, q.z));
+      n.auto = true;
+    }
+    if (n.auto && !n.flying) {
+      const next = n.path[0];
+      n.yawGoal = next ? yawToward(p, look.set(next.x, p.y, next.z)) : n.yawGoal;
+      if (!next) {
+        n.yawGoal = FACE_OUT;
+        n.auto = false;
+      }
+    }
+    if (n.yawGoal !== null && !n.flying) {
+      const d = Math.atan2(Math.sin(n.yawGoal - n.yaw), Math.cos(n.yawGoal - n.yaw));
+      n.yaw += d * Math.min(1, delta * 4);
+      if (Math.abs(d) < 0.002) n.yawGoal = null;
+    }
+    if (street) look.copy(STREET_LOOK);
     if (n.keys.size > 0 && !n.flying) {
       n.path = [];
+      n.auto = false;
       if (keyDirection(n.keys, n.yaw, dir)) p.addScaledVector(dir, WALK_SPEED * delta);
       keepWalkable(p, blocked.rects, blocked.bounds);
     } else if (n.path.length > 0) {
@@ -202,6 +229,11 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
     if (n.flying || e.delta > 6) return;
     e.stopPropagation();
     n.keys.clear();
+    if (zone === 'street' && n.pos.z > LOBBY.glassZ + 0.5 && inRect(e.point.x, e.point.z, ENTRANCE_TAP)) {
+      WALK_SIGNAL.goElevator = true;
+      return;
+    }
+    n.auto = false;
     n.path = [keepWalkable(e.point.clone(), blocked.rects, blocked.bounds)];
   };
 

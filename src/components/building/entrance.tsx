@@ -3,7 +3,7 @@
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { CanvasTexture, Color, DoubleSide, type Group, type InstancedMesh, Matrix4, type Mesh, MeshStandardMaterial, SRGBColorSpace, ShaderMaterial } from 'three';
+import { CanvasTexture, Color, DoubleSide, type Group, type Object3D, type InstancedMesh, type Material, Matrix4, type Mesh, MeshStandardMaterial, SRGBColorSpace, ShaderMaterial } from 'three';
 import { COLUMNS, COLUMN_SIZE, CORE, DOOR, ELEVATOR, FRONT_PIERS, LOBBY, PLINTH } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
 import type { KitPart } from '@/components/three/kit-model';
@@ -63,9 +63,25 @@ const DOOR_PLANTS: [number, number][] = [
   [-4.6, 12.4],
   [4.6, 12.4],
 ];
-/** Two lifts side by side across the core's front, each with a 1.9 m opening. */
-const LIFTS = [ELEVATOR.x0 + 1.75, ELEVATOR.x1 - 1.75];
-const LIFT = { w: 1.9, h: 2.8 };
+/**
+ * Two walk-in cabins set into a stone-clad bank in front of the core, the left one mirrored so
+ * their doors sit toward the middle. Model units: the cabin spans x −3.05…1.35 and z −1.49…1.21
+ * around its door, the interior x −2.91…1.11 and z −1.37…0.97, the opening ±0.95.
+ */
+const CAB_SCALE = 0.9;
+const CAB_FRONT_Z = ELEVATOR.z + 2.4;
+const CABS = [
+  { door: -0.8, flip: true },
+  { door: 4.8, flip: false },
+].map((c) => {
+  const s = (c.flip ? -1 : 1) * CAB_SCALE;
+  const span = (a: number, b: number) => [c.door + Math.min(a * s, b * s), c.door + Math.max(a * s, b * s)] as const;
+  const [ix0, ix1] = span(-2.91, 1.11);
+  return { ...c, sx: s, ix0, ix1, half: 0.95 * CAB_SCALE };
+});
+const CAB_Z = CAB_FRONT_Z - 1.21 * CAB_SCALE;
+const CAB_INNER = { z0: CAB_Z - 1.37 * CAB_SCALE, z1: CAB_Z + 0.97 * CAB_SCALE };
+const BANK = { x0: -2.3, x1: 6.3 };
 /** Centred in the column bays between |x| 15.5–24.5 and z 4.5–13.5, either side of the entrance. */
 const LOUNGES = [
   { x: 20, z: 9, w: 6.4, d: 4 },
@@ -79,10 +95,10 @@ const LOBBY_PLANTS: [number, number][] = [
   [-29, 9],
   [29, 9],
 ];
-/** Either side of the lift doors. */
+/** Either side of the lift bank. */
 const LIFT_PLANTS: [number, number][] = [
-  [ELEVATOR.x0 - 0.8, ELEVATOR.z + 0.6],
-  [ELEVATOR.x1 + 0.8, ELEVATOR.z + 0.6],
+  [BANK.x0 - 0.7, CAB_FRONT_Z + 0.7],
+  [BANK.x1 + 1.1, CAB_FRONT_Z + 1.1],
 ];
 const SIGNAL_POLES: [number, number][] = [
   [CROSSWALK.x + 2.2, AVENUE_Z - AVENUE_HALF - 1],
@@ -94,9 +110,20 @@ const STREET_LAMPS: [number, number][] = [-14, 12].flatMap((x) => [
 ]);
 
 /** Where a walker in the street, on the plaza or in the lobby can go. */
-export const STREET_BOUNDS: Rect = { x0: -34, x1: 34, z0: ELEVATOR.z + 1.4, z1: 68 };
-/** The elevator lobby in front of the doors; standing here offers the floor picker. */
-export const ELEVATOR_ZONE: Rect = { x0: ELEVATOR.x0, x1: ELEVATOR.x1, z0: ELEVATOR.z, z1: ELEVATOR.z + 3.2 };
+export const STREET_BOUNDS: Rect = { x0: -34, x1: 34, z0: ELEVATOR.z + 0.15, z1: 68 };
+/** Inside either cabin; standing here offers the floor picker. */
+export const ELEVATOR_ZONE: Rect = { x0: CABS[0]!.ix0, x1: CABS[1]!.ix1, z0: CAB_INNER.z0, z1: CAB_INNER.z1 };
+/** Where a tap on the entrance walks you: through the doors, across the lobby and into the right-hand cabin. */
+export function elevatorRoute(fromX: number, fromZ: number): { x: number; z: number }[] {
+  const cab = CABS[1]!;
+  const route: { x: number; z: number }[] = [];
+  if (fromZ > AVENUE_Z - AVENUE_HALF - 2) route.push({ x: 0, z: Math.min(fromZ, AVENUE_Z + AVENUE_HALF + 1.5) }, { x: 0, z: AVENUE_Z - AVENUE_HALF - 2 });
+  if (fromZ > LOBBY.glassZ) route.push({ x: 0, z: 27 }, { x: 0, z: 16 }, { x: 0, z: 10 });
+  route.push({ x: cab.door, z: CAB_FRONT_Z + 1.6 }, { x: cab.door, z: (CAB_INNER.z0 + CAB_INNER.z1) / 2 });
+  return route;
+}
+/** The entrance as a tap target: the canopy, the runway and the doors. */
+export const ENTRANCE_TAP: Rect = { x0: -7, x1: 7, z0: LOBBY.glassZ - 1, z1: 30 };
 export const LOBBY_SPAWN = { x: 1.5, z: ELEVATOR.z + 4.4 };
 
 export function streetObstacles(): Rect[] {
@@ -117,6 +144,17 @@ export function streetObstacles(): Rect[] {
   for (const c of COLUMNS) if (c.z > -6 && c.z < 14) rects.push(rectAt(c.x, c.z, COLUMN_SIZE, COLUMN_SIZE));
   for (const [x, z] of CANOPY_POSTS) rects.push(rectAt(x, z, 0.5, 0.5));
   for (const z of RUNWAY_ZS) for (const x of [-RUNWAY_X, RUNWAY_X]) rects.push(rectAt(x, z, 0.3, 0.3));
+  const [a, b] = [CABS[0]!, CABS[1]!];
+  const front = (x0: number, x1: number) => rects.push({ x0, x1, z0: CAB_FRONT_Z - 0.2, z1: CAB_FRONT_Z + 0.05 });
+  front(BANK.x0, a.door - a.half);
+  front(a.door + a.half, b.door - b.half);
+  front(b.door + b.half, BANK.x1);
+  for (const [x0, x1] of [
+    [BANK.x0, a.ix0],
+    [a.ix1, b.ix0],
+    [b.ix1, BANK.x1],
+  ] as const)
+    rects.push({ x0, x1, z0: ELEVATOR.z - 0.1, z1: CAB_FRONT_Z });
   for (const [x, z] of TREES) rects.push(rectAt(x, z, 1.6, 1.6));
   for (const [x, z] of AVENUE_TREES) if (Math.abs(x) < 40) rects.push(rectAt(x, z, 0.6, 0.6));
   for (const [x, z] of [...LOBBY_PLANTS, ...DOOR_PLANTS, ...LIFT_PLANTS]) rects.push(rectAt(x, z, 0.8, 0.8));
@@ -324,53 +362,69 @@ function Fountain() {
 const WATER_Y = 0.32;
 
 /** Brushed steel lift doors that slide apart while someone stands at the lifts, with the call panel and floor display. */
+/** The cabins' front panels, in place of the model's patterned wallpaper. */
+const BRONZE = new MeshStandardMaterial({ name: 'LiftBronze', color: '#3b332b', metalness: 0.7, roughness: 0.32 });
+
+/** Slides a cabin's doors: each leaf moves one door width into the wall pocket. */
+function slideDoors(cabin: Object3D, open: number) {
+  cabin.traverse((o) => {
+    if (o.userData.closedX === undefined) return;
+    o.position.x = (o.userData.closedX as number) + (o.name.startsWith('DoorL') ? -1 : 1) * open * 0.95;
+  });
+}
+
+/** The two walk-in cabins; each opens as you come up to its door or stand inside it. */
 function Lifts() {
   const { scene } = useGLTF(ELEVATOR_URL, DRACO_PATH);
-  const panels = useMemo(() => LIFTS.map(() => scene.clone(true)), [scene]);
-  const doors = useRef<(Group | null)[]>([]);
-  const open = useRef(0);
+  const cabins = useMemo(
+    () =>
+      CABS.map(() => {
+        const c = scene.clone(true);
+        c.traverse((o) => {
+          if (/^Door[LR]/.test(o.name)) o.userData.closedX = o.position.x;
+          const mesh = o as Mesh;
+          if (mesh.isMesh && (mesh.material as Material).name === 'WallPaper') mesh.material = BRONZE;
+        });
+        return c;
+      }),
+    [scene],
+  );
+  const open = useRef(CABS.map(() => 0));
   useFrame((_, delta) => {
-    const near = WALK.street && WALK.x > ELEVATOR_ZONE.x0 - 1 && WALK.x < ELEVATOR_ZONE.x1 + 1 && WALK.z < ELEVATOR_ZONE.z1 + 1.5;
-    open.current += ((near ? 1 : 0) - open.current) * Math.min(1, delta * 2.5);
-    doors.current.forEach((d, i) => {
-      if (d) d.position.x = (i % 2 === 0 ? -1 : 1) * (LIFT.w / 4 + open.current * (LIFT.w / 2 - 0.05));
+    CABS.forEach((c, i) => {
+      const near =
+        WALK.street && Math.abs(WALK.x - c.door) < (WALK.z < CAB_FRONT_Z ? 2.2 : 1.8) && WALK.z > CAB_INNER.z0 - 0.5 && WALK.z < CAB_FRONT_Z + 2.6;
+      const k = open.current[i]! + ((near ? 1 : 0) - open.current[i]!) * Math.min(1, delta * 2.2);
+      open.current[i] = k;
+      slideDoors(cabins[i]!, k);
     });
   });
   const y = LOBBY.floor;
+  const top = y + 3.21 * CAB_SCALE;
+  const bankW = BANK.x1 - BANK.x0;
+  const bankD = CAB_FRONT_Z - ELEVATOR.z;
   return (
     <group>
-      {LIFTS.map((x, li) => (
-        <group key={x} position={[x, y, ELEVATOR.z]}>
-          <mesh position={[0, LIFT.h / 2, 0.02]}>
-            <boxGeometry args={[LIFT.w, LIFT.h, 0.04]} />
-            <meshStandardMaterial color="#0c0d10" roughness={0.9} />
-          </mesh>
-          {[0, 1].map((k) => (
-            <group
-              key={k}
-              ref={(g) => {
-                doors.current[li * 2 + k] = g;
-              }}
-            >
-              <mesh position={[0, LIFT.h / 2, 0.08]}>
-                <boxGeometry args={[LIFT.w / 2, LIFT.h, 0.05]} />
-                <meshStandardMaterial color="#b9bcc2" metalness={0.92} roughness={0.32} />
-              </mesh>
-            </group>
-          ))}
-          {[-1, 1].map((s) => (
-            <mesh key={s} position={[s * (LIFT.w / 2 + 0.06), LIFT.h / 2 + 0.06, 0.09]}>
-              <boxGeometry args={[0.12, LIFT.h + 0.12, 0.1]} />
-              <meshStandardMaterial color="#8d9097" metalness={0.9} roughness={0.25} />
-            </mesh>
-          ))}
-          <mesh position={[0, LIFT.h + 0.06, 0.09]}>
-            <boxGeometry args={[LIFT.w + 0.24, 0.12, 0.1]} />
-            <meshStandardMaterial color="#8d9097" metalness={0.9} roughness={0.25} />
-          </mesh>
-          <primitive object={panels[li]!} position={[0, 0, -1.12]} />
+      {CABS.map((c, i) => (
+        <group key={c.door} position={[c.door, y, CAB_Z]} scale={[c.sx, CAB_SCALE, CAB_SCALE]}>
+          <primitive object={cabins[i]!} />
+          <pointLight position={[-0.9, 2.6, -0.2]} color="#fff1dc" intensity={6} distance={4.5} decay={1.6} />
         </group>
       ))}
+      <mesh position={[(BANK.x0 + BANK.x1) / 2, (top + LOBBY.ceiling) / 2, CAB_FRONT_Z - 0.1]}>
+        <boxGeometry args={[bankW, LOBBY.ceiling - top, 0.2]} />
+        <meshStandardMaterial color="#d9d5cd" roughness={0.45} />
+      </mesh>
+      {[BANK.x0 + 0.16, BANK.x1 - 0.16].map((x) => (
+        <mesh key={x} position={[x, (y + LOBBY.ceiling) / 2, ELEVATOR.z + bankD / 2]}>
+          <boxGeometry args={[0.32, LOBBY.ceiling - y, bankD]} />
+          <meshStandardMaterial color="#d9d5cd" roughness={0.45} />
+        </mesh>
+      ))}
+      <mesh position={[(CABS[0]!.ix1 + CABS[1]!.ix0) / 2, (y + top) / 2, CAB_FRONT_Z - 0.02]}>
+        <boxGeometry args={[CABS[1]!.ix0 - CABS[0]!.ix1 - 0.1, top - y, 0.08]} />
+        <meshStandardMaterial color="#d9d5cd" roughness={0.45} />
+      </mesh>
     </group>
   );
 }
@@ -529,8 +583,8 @@ function Lobby() {
   const y = LOBBY.floor;
   return (
     <group>
-      <mesh position={[(ELEVATOR.x0 + ELEVATOR.x1) / 2, y + 4.5, ELEVATOR.z + 0.06]} material={wall}>
-        <planeGeometry args={[ELEVATOR.x1 - ELEVATOR.x0 + 2, 3]} />
+      <mesh position={[(BANK.x0 + BANK.x1) / 2, y + 4.6, CAB_FRONT_Z + 0.02]} material={wall}>
+        <planeGeometry args={[BANK.x1 - BANK.x0 - 0.5, 2.6]} />
       </mesh>
       {[-3, 3, 9].map((z) => (
         <mesh key={z} position={[0, LOBBY.ceiling - 0.08, z]}>

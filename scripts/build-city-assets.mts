@@ -150,6 +150,7 @@ async function build(file: string, out: string, opts: BuildOpts) {
   const reader = await io();
   const doc = await reader.read(resolve(SRC, file));
   await doc.transform(metalRough());
+  for (const anim of doc.getRoot().listAnimations()) anim.dispose();
   await bake(doc);
   if (opts.dropMaterials) {
     for (const node of doc.getRoot().listNodes()) {
@@ -280,7 +281,11 @@ async function main() {
   });
   await build('elevator_with_animation_lowpoly.glb', 'lobby-elevator.glb', {
     maxTexture: 1024,
-    keep: [{ match: /^(OutsideButtons|ScreenOutside)_/, as: 'ElevPanel' }],
+    keep: [
+      { match: /^Door1_/, as: 'DoorL' },
+      { match: /^Door2_/, as: 'DoorR' },
+      { match: /./, as: 'Cabin' },
+    ],
   });
   await build('car1.glb', 'spacehub-traffic-a.glb', {
     maxTexture: 512,

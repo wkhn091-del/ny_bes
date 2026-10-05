@@ -11,6 +11,7 @@ import { use3DCapable } from '@/components/three/capability';
 import { useFullscreen, useInView } from '@/components/three/stage-hooks';
 import type { Mood, Track } from '@/content/music';
 import { AmbientMusic } from './ambient-music';
+import { WALK_SIGNAL } from './walk-signal';
 import { daylightOf, sunPosition, type SkyMode } from './sky';
 
 const BuildingScene = dynamic(() => import('./BuildingScene'), { ssr: false });
@@ -277,10 +278,22 @@ export function BuildingShowcase({ className }: { className?: string }) {
             <span className="text-xs font-semibold sm:text-sm">הרחוב והלובי</span>
             <span className="flex items-center gap-1 text-2xs text-white/75">
               <Hand className="h-3 w-3 shrink-0" aria-hidden="true" />
-              <span className="sm:hidden">הקישו על הקרקע ללכת · המעלית בסוף הלובי</span>
-              <span className="hidden sm:inline">חצו במעבר החצייה, היכנסו בדלתות והגיעו למעלית · W A S D או לחיצה</span>
+              <span className="sm:hidden">הקישו על הכניסה ותגיעו למעלית לבד</span>
+              <span className="hidden sm:inline">הקישו על הכניסה, או לכו בעצמכם · W A S D או לחיצה על הקרקע</span>
             </span>
           </div>
+          {!atElevator && (
+            <button
+              type="button"
+              onClick={() => {
+                WALK_SIGNAL.goElevator = true;
+              }}
+              className="absolute bottom-16 right-3 flex items-center gap-1.5 rounded-full bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition-transform hover:scale-[1.03] active:scale-[0.97] sm:bottom-4 sm:right-4"
+            >
+              <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+              למעלית
+            </button>
+          )}
           {atElevator && (
             <section
               aria-live="polite"
