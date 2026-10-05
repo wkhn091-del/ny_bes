@@ -155,6 +155,15 @@ export function BuildingShowcase({ className }: { className?: string }) {
   }, []);
 
   useEffect(() => {
+    if (!walking) return;
+    const root = document.documentElement;
+    root.dataset.walk3d = '';
+    return () => {
+      delete root.dataset.walk3d;
+    };
+  }, [walking]);
+
+  useEffect(() => {
     if (!ride) return;
     const { from, to } = ride;
     const steps = Math.abs(to - from);
