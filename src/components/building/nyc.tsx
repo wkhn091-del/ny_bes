@@ -132,6 +132,22 @@ function prepareNyc(scene: Object3D): { root: Object3D; materials: Material[] } 
   return { root, materials: [...done.values()] };
 }
 
+/** One complete tower (base, facade, rooftop plant and water tank) cut from the same model, standing alone. */
+export const NYC_TOWER_URL = '/models/nyc-tower.glb';
+const TOWER_CENTER = { x: -117.9, z: -32.06 };
+
+/** The neighbouring building beside the tower. */
+export function NycTower({ at }: { at: readonly [number, number, number] }) {
+  const { scene } = useGLTF(NYC_TOWER_URL, DRACO_PATH);
+  const { root, materials } = useMemo(() => prepareNyc(scene), [scene]);
+  useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);
+  return (
+    <group position={[at[0], at[1], at[2]]}>
+      <primitive object={root} position={[-TOWER_CENTER.x, 0, -TOWER_CENTER.z]} />
+    </group>
+  );
+}
+
 /** Real New York blocks (brick, limestone, glass, water towers, fire escapes, street trees) around the tower. */
 export function NycBlocks() {
   const { scene } = useGLTF(NYC_URL, DRACO_PATH);

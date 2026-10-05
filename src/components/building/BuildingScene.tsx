@@ -3,17 +3,17 @@
 import { Environment, Html, Lightformer, OrbitControls, useGLTF } from '@react-three/drei';
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { AdditiveBlending, CanvasTexture, Color, type Group, MeshBasicMaterial, type PerspectiveCamera, type PointLight, SRGBColorSpace, Vector3 } from 'three';
+import { AdditiveBlending, CanvasTexture, Color, type Group, MeshBasicMaterial, MeshStandardMaterial, type PerspectiveCamera, type PointLight, SRGBColorSpace, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { BUILDING_URL, CLEAR_HEIGHT, FLOOR_COUNT, PLATE, PROGRAM_COPY, ROOF_Y, floorY, prepareBuilding, programOf } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
-import { KIT_URL, extractKit } from '@/components/three/kit-model';
+import { KIT_URL } from '@/components/three/kit-model';
 import { Atmosphere } from './atmosphere';
 import { City, GOBLIN_URL, NEIGHBOUR_AT, SIGNS_URL, TRAFFIC_A_URL, fadeByDay } from './city';
 import { ELEVATOR_URL, Entrance, FOUNTAIN_URL, HERO_CAR_URL, PLANTS_URL, RECEPTION_URL, TREE_URL } from './entrance';
 import { EXEC_URL, Furnishing, Interior, LOUNGE_URL, MEET_URL } from './interior';
 import { buildLayout, type Layout } from './layout';
-import { NYC_URL, NycBlocks, liftOverNyc } from './nyc';
+import { NYC_TOWER_URL, NYC_URL, NycBlocks, NycTower, liftOverNyc } from './nyc';
 import { CLIP, CLIP_PLANES, CUT, WALK } from './shared';
 import { SKY, applyDayTints, dayTint, type SkyMode } from './sky';
 import { WalkRig } from './walk';
@@ -237,8 +237,8 @@ function CutawayAnimator({ selected, walking }: { selected: number | null; walki
 }
 
 const OVERVIEW_TARGET = new Vector3(14, 60, 0);
-/** From the east, down the avenue's open corridor and above the New York blocks' roofs. */
-const OVERVIEW_DIR = new Vector3(0.82, 0.3, 0.48).normalize();
+/** From the south-east, above the New York blocks' roofs and south of the neighbouring tower. */
+const OVERVIEW_DIR = new Vector3(0.7, 0.33, 0.65).normalize();
 
 function goalFor(selected: number | null, aspect: number, pos: Vector3, target: Vector3) {
   if (selected === null) {
@@ -327,16 +327,17 @@ function CameraRig({ selected, walking }: { selected: number | null; walking: bo
   );
 }
 
-/** The stone building from the kit, as a lit neighbour across the plaza. */
-function Neighbour() {
-  const { scene } = useGLTF(KIT_URL, DRACO_PATH);
-  const bank = useMemo(() => extractKit(scene).bank, [scene]);
-  if (!bank) return null;
-  return <primitive object={bank} position={NEIGHBOUR_AT} />;
-}
-
 function setGlassOpacity(m: { opacity: number } | null, opacity: number) {
   if (m) m.opacity = opacity;
+}
+
+const NIGHT_GLOW = new Color('#ffc987');
+
+/** After dark the facade glows warm, a lit office tower that stands out from the city around it. */
+function setNightGlow(m: unknown, k: number) {
+  if (!(m instanceof MeshStandardMaterial)) return;
+  m.emissive.copy(NIGHT_GLOW);
+  m.emissiveIntensity = k;
 }
 
 function Building({ selected, layout }: { selected: number | null; layout: Layout }) {
@@ -346,6 +347,7 @@ function Building({ selected, layout }: { selected: number | null; layout: Layou
   useFrame(() => {
     applyDayTints(glassTint);
     setGlassOpacity(parts.facadeGlass, WALK.inside ? 0.2 : 0.2 + 0.4 * SKY.day);
+    setNightGlow(parts.facadeGlass, WALK.inside ? 0 : 0.42 * (1 - SKY.day));
   });
   return (
     <group>
@@ -412,7 +414,7 @@ export default function BuildingScene({
       <Suspense fallback={null}>
         <Building selected={selected} layout={layout} />
         <Suspense fallback={null}>
-          <Neighbour />
+          <NycTower at={NEIGHBOUR_AT} />
         </Suspense>
         <Suspense fallback={null}>
           <Entrance />
@@ -439,6 +441,7 @@ useGLTF.preload(FOUNTAIN_URL, DRACO_PATH);
 useGLTF.preload(ELEVATOR_URL, DRACO_PATH);
 useGLTF.preload(TREE_URL, DRACO_PATH);
 useGLTF.preload(NYC_URL, DRACO_PATH);
+useGLTF.preload(NYC_TOWER_URL, DRACO_PATH);
 useGLTF.preload(EXEC_URL, DRACO_PATH);
 useGLTF.preload(LOUNGE_URL, DRACO_PATH);
 useGLTF.preload(MEET_URL, DRACO_PATH);

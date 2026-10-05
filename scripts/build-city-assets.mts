@@ -206,6 +206,12 @@ async function main() {
       { match: /^Object_38$/, as: 'Tree', crop: oneTree },
     ],
   });
+  await build(join(OUT, 'nyc-block.glb'), 'nyc-tower.glb', {
+    maxTexture: 1024,
+    dropMaterials: /Street|lanes|side_?walks|Curb|Grass|Foliage|Bark|Decal|trash|WetFloor|dark_green|^material_0$/i,
+    keep: [{ match: /./, as: 'Tower', crop: (x, y, z) => Math.abs(x + 117.6) < 12.6 && Math.abs(z + 32.1) < 17.2 && y > 0.15 }],
+    merge: true,
+  });
   await build('minimalistic_modern_office.glb', 'office-exec.glb', {
     maxTexture: 1024,
     keep: [
