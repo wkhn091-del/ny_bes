@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { ArrowRight, ArrowUpDown, Box, Clock, DoorOpen, Footprints, Hand, LogOut, Maximize2, Minimize2, Moon, Music, Sun, VolumeX } from 'lucide-react';
+import { ArrowRight, ArrowUpDown, Box, Clock, DoorOpen, Footprints, Hand, LogOut, Maximize2, Minimize2, Moon, Music, SkipForward, Sun, VolumeX } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLOOR_COUNT, PROGRAM_COPY, programOf } from '@/components/three/building-model';
 import { use3DCapable } from '@/components/three/capability';
 import { useFullscreen, useInView } from '@/components/three/stage-hooks';
+import type { Track } from '@/content/music';
 import { AmbientMusic } from './ambient-music';
 import { daylightOf, sunPosition, type SkyMode } from './sky';
 
@@ -42,6 +43,7 @@ export function BuildingShowcase({ className }: { className?: string }) {
   const [atElevator, setAtElevator] = useState(false);
   const [skyMode, setSkyMode] = useState<SkyMode>('auto');
   const [music, setMusic] = useState(false);
+  const [track, setTrack] = useState<Track | null>(null);
   const player = useRef<AmbientMusic | null>(null);
   const onReady = useCallback(() => setReady(true), []);
   const onElevator = useCallback((at: boolean) => setAtElevator(at), []);
@@ -49,7 +51,10 @@ export function BuildingShowcase({ className }: { className?: string }) {
   if (capable && near && !mounted) setMounted(true);
 
   const toggleMusic = useCallback(() => {
-    player.current ??= new AmbientMusic();
+    player.current ??= new AmbientMusic((t) => {
+      setTrack(t);
+      if (!t && !player.current?.playing) setMusic(false);
+    });
     if (music) player.current.stop();
     else void player.current.start(moodFor(skyMode));
     setMusic(!music);
@@ -171,6 +176,22 @@ export function BuildingShowcase({ className }: { className?: string }) {
           >
             {music ? <Music className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
           </button>
+          {music && (
+            <button
+              type="button"
+              onClick={() => player.current?.skip()}
+              aria-label={track ? `לשיר הבא (עכשיו: ${track.title})` : 'לשיר הבא'}
+              title={track ? `${track.title} · לשיר הבא` : 'לשיר הבא'}
+              className={clsx(chip, 'flex max-w-40 items-center gap-1.5 py-1.5 pe-2.5 ps-2 text-2xs hover:bg-black/75')}
+            >
+              <SkipForward className="h-3.5 w-3.5 shrink-0 rtl:-scale-x-100" aria-hidden="true" />
+              {track && (
+                <span dir="ltr" className="truncate">
+                  {track.title}
+                </span>
+              )}
+            </button>
+          )}
         </div>
       )}
       {capable && ready && selected === null && !walking && (

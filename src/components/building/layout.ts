@@ -36,6 +36,7 @@ export const PLANT_FOOTPRINT = 0.7;
 /** Walk-blocking footprints of the realistic sets: the leather lounge and an executive desk with its chair. */
 export const LOUNGE_SET = [5, 4.5] as const;
 export const EXEC_SET = [2.8, 1.9] as const;
+export const MEET_SET = [5.4, 2.7] as const;
 export const deskTopOffset = (it: Item): Item => ({ ...it, z: it.z + (it.s ?? 1) * 0.3 });
 
 /** Names shown on the desk monitors, cycled desk by desk. */
@@ -179,7 +180,7 @@ export function obstaclesFor(layout: Layout, f: number): { rects: Rect[]; bounds
   const rects: Rect[] = [{ ...CORE }, ...COLUMN_RECTS];
   for (const g of on(layout.glass)) rects.push(rectAt(g.x, g.z, g.sx ?? 0.06, g.sz ?? 0.06));
   for (const d of on(layout.desks).map(deskTopOffset)) rects.push(rectAt(d.x, d.z, DESK_TOP[0], DESK_TOP[2]));
-  for (const t of on(layout.tables)) rects.push(rectAt(t.x, t.z, TABLE[0], TABLE[2]));
+  for (const t of on(layout.tables)) rects.push(rectAt(t.x, t.z, MEET_SET[0], MEET_SET[1]));
   for (const so of on(layout.sofas)) rects.push(rectAt(so.x, so.z, SOFA[0], SOFA[2]));
   for (const l of on(layout.lounge)) rects.push(rectAt(l.x, l.z, LOUNGE_SET[0], LOUNGE_SET[1]));
   for (const e of on(layout.exec)) rects.push(rectAt(e.x, e.z, EXEC_SET[0], EXEC_SET[1]));

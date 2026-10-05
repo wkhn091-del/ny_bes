@@ -2,8 +2,6 @@ import { ArrowLeft, BadgeCheck, CreditCard, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { BuildingShowcase } from '@/components/building/BuildingShowcase';
-import { FloorMap } from '@/components/home/FloorMap';
-import type { LiveFloor } from '@/components/home/floor-types';
 import { StickyCta } from '@/components/home/StickyCta';
 import { WhyUs } from '@/components/home/WhyUs';
 import { SearchBar } from '@/components/search/SearchBar';
@@ -13,7 +11,6 @@ import { getCatalog } from '@/lib/content/catalog';
 import { calculatePrice, formatIls } from '@/lib/domain/pricing';
 import { BOOKING_WINDOW_DAYS, maxBookableDate, nextOpenDate, nowInIsrael } from '@/lib/domain/time';
 import { SPACE_TYPES, SPACE_TYPE_LABELS, type SpaceType } from '@/lib/domain/types';
-import { liveMapBranch, liveMapSpaces } from '@/lib/server/availability';
 import { FREE_CANCELLATION_HOURS } from '@/lib/domain/booking-rules';
 
 const TYPE_COPY: Record<SpaceType, { pitch: string; unit: string }> = {
@@ -29,16 +26,6 @@ export default async function HomePage() {
   const cityNames = cities.map((c) => c.name);
   const cityList = cityNames.length > 1 ? `${cityNames.slice(0, -1).join(', ')} ו${cityNames.at(-1)}` : (cityNames[0] ?? '');
   const flagship = branches.find((b) => b.isFlagship) ?? branches[0];
-  const mapBranch = liveMapBranch(branches, null);
-  const mapLayouts: LiveFloor[] = (mapBranch ? [mapBranch, ...branches.filter((b) => b.id !== mapBranch.id)] : [])
-    .map((b) => ({
-      branch: { slug: b.slug, name: b.name, city: b.city.name },
-      isOpen: false,
-      at: null,
-      spaces: liveMapSpaces(spaces, b.id),
-    }))
-    .filter((f) => f.spaces.length > 0);
-
   const typeSummaries = SPACE_TYPES.map((type) => {
     const ofType = spaces.filter((s) => s.type === type);
     return {
@@ -147,24 +134,6 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
-
-      {mapLayouts.length > 0 && (
-        <section className="border-b border-border" aria-labelledby="live-title">
-          <div className="mx-auto grid max-w-7xl gap-6 px-4 py-10 sm:gap-8 sm:px-6 sm:py-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-center">
-            <div>
-              <h2 id="live-title" className="text-3xl font-bold tracking-tight">
-                מה פנוי ברגע זה
-              </h2>
-              <p className="mt-3 max-w-lg leading-7 text-muted">
-                מפה חיה של הסניף: כל עמדה וכל חדר מסומנים לפי הזמינות עכשיו, ישירות ממערכת ההזמנות.
-              </p>
-            </div>
-            <div className="h-[340px] sm:h-[460px]">
-              <FloorMap layouts={mapLayouts} />
-            </div>
-          </div>
-        </section>
-      )}
 
       {priceExample && (
         <section className="border-b border-border" aria-labelledby="price-title">

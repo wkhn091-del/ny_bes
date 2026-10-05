@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { CREDITS } from '@/content/credits';
+import { MUSIC_ARTIST, MUSIC_LICENSE, PLAYLISTS } from '@/content/music';
 
 export const metadata: Metadata = {
   title: 'קרדיטים',
@@ -37,6 +38,33 @@ export default function CreditsPage() {
           </li>
         ))}
       </ul>
+
+      <h2 className="mt-12 text-xl font-bold sm:text-2xl">מוזיקת רקע</h2>
+      <p className="mt-2 text-sm leading-6 text-muted">
+        המוזיקה בסיור היא של{' '}
+        <a href={MUSIC_ARTIST.url} target="_blank" rel="noopener noreferrer" dir="ltr" className="underline decoration-border underline-offset-4 hover:decoration-current">
+          {MUSIC_ARTIST.name}
+        </a>
+        , שמשחרר אותה לנחלת הכלל ברישיון{' '}
+        <a href={MUSIC_LICENSE.licenseUrl} target="_blank" rel="noopener noreferrer" dir="ltr" className="underline decoration-border underline-offset-4 hover:decoration-current">
+          {MUSIC_LICENSE.license}
+        </a>
+        . הרישיון לא מחייב ייחוס, אבל מגיע לו. השירים דחוסים ועם עוצמה אחידה.
+      </p>
+      {(['day', 'night'] as const).map((mood) => (
+        <div key={mood} className="mt-5">
+          <h3 className="text-sm font-semibold">{mood === 'day' ? 'ביום' : 'בלילה'}</h3>
+          <ul className="mt-2 flex flex-wrap gap-2" dir="ltr">
+            {PLAYLISTS[mood].map((t) => (
+              <li key={t.src}>
+                <a href={t.source} target="_blank" rel="noopener noreferrer" className="inline-block rounded-full border border-border px-3 py-1 text-sm hover:bg-subtle">
+                  {t.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </section>
   );
 }

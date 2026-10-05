@@ -35,7 +35,7 @@ import {
 import { RealisticFurniture, SpacePhotos } from './realistic';
 import { nameScreenTexture } from './screens';
 
-export { EXEC_URL, LOUNGE_URL } from './realistic';
+export { EXEC_URL, LOUNGE_URL, MEET_URL } from './realistic';
 import { CLIP_PLANES, ONE, composeItem, seededRandom, type Item } from './shared';
 
 /** Box instances for every item, optionally skipping one floor (where detailed models take over). */
@@ -422,8 +422,6 @@ export function Furnishing({ selected, layout, builtDesk }: { selected: number; 
       chairsBlack: deskChairs.filter((c) => c.k === 0),
       chairsBlue: deskChairs.filter((c) => c.k === 1),
       chairsLeather: deskChairs.filter((c) => c.k === 2),
-      meetChairs: chairs.filter((c) => c.meet).map((c) => turn(c, KIT_CHAIR_YAW)),
-      tables: on(layout.tables),
     };
   }, [layout, selected, builtDesk]);
   const p = kit.parts;
@@ -434,8 +432,6 @@ export function Furnishing({ selected, layout, builtDesk }: { selected: number; 
       <KitInstances parts={p.markusBlack} items={set.chairsBlack} />
       <KitInstances parts={p.markusBlue} items={set.chairsBlue} />
       <KitInstances parts={p.leatherChair} items={set.chairsLeather} />
-      <KitInstances parts={p.managerChair} items={set.meetChairs} />
-      <KitInstances parts={p.conference} items={set.tables} />
       <Suspense fallback={null}>
         <RealisticFurniture layout={layout} selected={selected} Instances={KitInstances} />
       </Suspense>

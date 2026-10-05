@@ -8,9 +8,11 @@ import { COLUMNS, COLUMN_SIZE, CORE, DOOR, ELEVATOR, FRONT_PIERS, LOBBY, PLINTH 
 import { DRACO_PATH } from '@/components/three/desk-model';
 import { AVENUE_HALF, AVENUE_Z, CROSSWALK } from './city';
 import { rectAt, type Rect } from './layout';
+import { SIGN_SPOTS } from './roads';
 import { WALK } from './shared';
 
-export const HERO_CAR_URL = '/models/spacehub-hero-car.glb';
+/** The Lamborghini Revuelto (see streets.tsx for the credit); the podium shows the same model the traffic uses. */
+export const HERO_CAR_URL = '/models/car-revuelto.glb';
 
 const CANOPY = { x: 7, z0: 15, z1: 27, y: 6.3 };
 const CANOPY_POSTS: [number, number][] = [
@@ -78,6 +80,7 @@ export function streetObstacles(): Rect[] {
   for (const [x, z] of LOBBY_SOFAS) rects.push(rectAt(x, z, 3, 1));
   for (const [x, z] of LOBBY_PLANTS) rects.push(rectAt(x, z, 0.8, 0.8));
   for (const [x, z] of [...SIGNAL_POLES, ...STREET_LAMPS]) rects.push(rectAt(x, z, 0.3, 0.3));
+  for (const s of SIGN_SPOTS) rects.push(rectAt(s.x, s.z, 0.4, 0.4));
   return rects;
 }
 

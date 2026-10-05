@@ -13,25 +13,28 @@ import type { Item } from './shared';
 export const EXEC_URL = '/models/office-exec.glb';
 /** "free Loft 17" by dasy444 (CC-BY-4.0): leather sectional lounge set, armchair pair, vase. */
 export const LOUNGE_URL = '/models/loft-lounge.glb';
+/** "Meeting room" by Titank (CC-BY-4.0): boardroom table with twelve chairs, long side along X. */
+export const MEET_URL = '/models/meeting-set.glb';
 
-const GROUP_NAME = /^(ExecSet|ExecPlant|SofaSet|ArmSet|LoftPlant)_\d+/;
+/** Group names written by scripts/build-city-assets.mts: `<Group>_<n>`. */
+const GROUP_NAME = /^([A-Z][A-Za-z]+)_\d+$/;
 
-type Groups = Partial<Record<'ExecSet' | 'ExecPlant' | 'SofaSet' | 'ArmSet' | 'LoftPlant', KitPart[]>>;
+export type Groups = Partial<Record<string, KitPart[]>>;
 
 /**
  * Bakes each named group from the asset files into instancing-ready parts: geometry moved so the
  * group stands on y = 0 centred on its footprint, then turned by `turn[group]` to face +Z.
  */
-function groupsOf(scene: Object3D, turn: Partial<Record<keyof Groups, number>>): Groups {
+export function groupsOf(scene: Object3D, turn: Record<string, number> = {}): Groups {
   scene.updateMatrixWorld(true);
-  const raw = new Map<keyof Groups, KitPart[]>();
+  const raw = new Map<string, KitPart[]>();
   scene.traverse((obj) => {
     const mesh = obj as Mesh;
     if (!mesh.isMesh) return;
     let owner: Object3D | null = mesh;
     while (owner && !GROUP_NAME.test(owner.name)) owner = owner.parent;
     if (!owner) return;
-    const key = GROUP_NAME.exec(owner.name)![1] as keyof Groups;
+    const key = GROUP_NAME.exec(owner.name)![1]!;
     const material = (mesh.material as Material).clone();
     if ((material as MeshStandardMaterial).transparent) {
       material.transparent = false;
@@ -60,7 +63,7 @@ function groupsOf(scene: Object3D, turn: Partial<Record<keyof Groups, number>>):
   return out;
 }
 
-function disposeGroups(g: Groups) {
+export function disposeGroups(g: Groups) {
   for (const parts of Object.values(g)) for (const p of parts ?? []) {
     p.geometry.dispose();
     p.material.dispose();
@@ -89,6 +92,7 @@ export function realisticSet(layout: Layout, f: number) {
   const lounges = layout.lounge.filter((it) => it.f === f);
   return {
     exec,
+    meetings: layout.tables.filter((it) => it.f === f),
     plants,
     sofas: lounges.map((it) => ({ ...it, r: Math.PI })),
     vases: lounges.flatMap((it) => [-3.4, 3.4].map((dx) => ({ f, x: it.x + dx, z: it.z + 2.3 }))),
@@ -97,16 +101,21 @@ export function realisticSet(layout: Layout, f: number) {
 
 type Instances = (props: { parts: KitPart[] | undefined; items: Item[] }) => ReactNode;
 
-/** Real furniture from the two asset files on the open floor: executive offices and the lounge. */
+/** Real furniture from the asset files on the open floor: executive offices, meeting rooms and the lounge. */
 export function RealisticFurniture({ layout, selected, Instances }: { layout: Layout; selected: number; Instances: Instances }) {
   const exec = useGLTF(EXEC_URL, DRACO_PATH);
   const loft = useGLTF(LOUNGE_URL, DRACO_PATH);
-  const g = useMemo(() => ({ ...groupsOf(exec.scene, { ExecSet: EXEC_TURN }), ...groupsOf(loft.scene, {}) }), [exec.scene, loft.scene]);
+  const meet = useGLTF(MEET_URL, DRACO_PATH);
+  const g = useMemo(
+    () => ({ ...groupsOf(exec.scene, { ExecSet: EXEC_TURN }), ...groupsOf(loft.scene), ...groupsOf(meet.scene) }),
+    [exec.scene, loft.scene, meet.scene],
+  );
   useEffect(() => () => disposeGroups(g), [g]);
   const set = useMemo(() => realisticSet(layout, selected), [layout, selected]);
   return (
     <>
       <Instances parts={g.ExecSet} items={set.exec} />
+      <Instances parts={g.MeetSet} items={set.meetings} />
       <Instances parts={g.ExecPlant} items={set.plants} />
       <Instances parts={g.SofaSet} items={set.sofas} />
       <Instances parts={g.LoftPlant} items={set.vases} />

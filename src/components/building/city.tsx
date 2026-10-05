@@ -1,23 +1,18 @@
 'use client';
 
-import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   BackSide,
-  BoxGeometry,
   type BufferGeometry,
   CanvasTexture,
   CatmullRomCurve3,
   Color,
   CylinderGeometry,
   type InstancedMesh,
-  type Material,
   Matrix4,
-  type Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
-  type Object3D,
   Quaternion,
   RepeatWrapping,
   SRGBColorSpace,
@@ -25,22 +20,16 @@ import {
   Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { DRACO_PATH } from '@/components/three/desk-model';
 import { inNyc } from './nyc';
-import { WALK, seededRandom } from './shared';
-import { DAY_UNIFORM, SKY, applyDayTints, dayTint } from './sky';
+import { AVENUE_HALF, AVENUE_Z, RIVER, SIDE_X, gridStrips, nearGrid } from './roads';
+import { seededRandom } from './shared';
+import { DAY_UNIFORM, SKY } from './sky';
+import { GridStreets, RoadSigns, Signals, Streets, Traffic } from './streets';
 
-export const AVENUE_Z = 52;
-export const AVENUE_HALF = 8;
-export const SIDE_X = -64;
-export const CROSSWALK = { x: 4, stopLine: 8 };
+export { AVENUE_HALF, AVENUE_Z, CROSSWALK, SIDE_X } from './roads';
+export { GOBLIN_URL, REVUELTO_URL, SIGNS_URL, TRAFFIC_A_URL } from './streets';
 export const NEIGHBOUR_AT: [number, number, number] = [84, 0, 14];
-const ROAD_HALF = 420;
-const RIVER = { z0: -470, z1: -600 };
 const BRIDGE_X = 260;
-
-export const TRAFFIC_A_URL = '/models/spacehub-traffic-a.glb';
-export const TRAFFIC_B_URL = '/models/spacehub-traffic-b.glb';
 
 /**
  * Night windows drawn from world position, so every tower gets correctly sized floors and bays
@@ -118,6 +107,7 @@ function inReserved(x: number, z: number, pad: number): boolean {
   if (Math.abs(x) < 52 + pad && z > -32 - pad && z < 44 + pad) return true;
   if (Math.abs(x - NEIGHBOUR_AT[0]) < 32 + pad && Math.abs(z - NEIGHBOUR_AT[2]) < 28 + pad) return true;
   if (z < RIVER.z0 + 10 && z > RIVER.z1 - 10) return true;
+  if (nearGrid(x, z, pad + 3)) return true;
   return inNyc(x, z, pad + 4);
 }
 
@@ -145,10 +135,7 @@ function makeTowers(): Tower[] {
   return out;
 }
 
-const _m = new Matrix4();
 const _q = new Quaternion();
-const _p = new Vector3();
-const _s = new Vector3();
 
 function setInstances(mesh: InstancedMesh | null, list: Matrix4[]) {
   if (!mesh) return;
@@ -483,337 +470,26 @@ export function fadeByDay(m: { opacity: number; userData: Record<string, unknown
   m.opacity = base * (1 - by * SKY.day);
 }
 
-const LAMP_HEAD = new Color('#ffd9a0').multiplyScalar(2.4);
-/** Road paint sits well clear of the asphalt and is pulled forward in depth, so it never flickers from far away. */
-const MARK_Y = 0.07;
-
-/** Streets: asphalt, plaza, sidewalks, lane marks, a zebra crossing in front of the entrance and street lamps. */
-function Streets() {
-  const dashes = useRef<InstancedMesh>(null);
-  const zebra = useRef<InstancedMesh>(null);
-  const lamps = useRef<InstancedMesh>(null);
-  const heads = useRef<InstancedMesh>(null);
-  const data = useMemo(() => {
-    const dashList: Matrix4[] = [];
-    for (let x = -ROAD_HALF; x < ROAD_HALF; x += 9) {
-      if (Math.abs(x) < CROSSWALK.x + 2) continue;
-      for (const dz of [-3.7, 3.7]) dashList.push(new Matrix4().compose(new Vector3(x, MARK_Y, AVENUE_Z + dz), _q.identity(), new Vector3(3.5, 1, 0.15)));
-      dashList.push(new Matrix4().compose(new Vector3(x, MARK_Y, AVENUE_Z), _q.identity(), new Vector3(9, 1, 0.12)));
-    }
-    const zebraList: Matrix4[] = [];
-    for (let z = AVENUE_Z - AVENUE_HALF + 0.6; z < AVENUE_Z + AVENUE_HALF - 0.4; z += 1.1)
-      zebraList.push(new Matrix4().compose(new Vector3(0, MARK_Y, z), _q.identity(), new Vector3(CROSSWALK.x * 2, 1, 0.55)));
-    const lampList: Matrix4[] = [];
-    const headList: Matrix4[] = [];
-    for (let x = -300; x <= 300; x += 26) {
-      for (const z of [AVENUE_Z - AVENUE_HALF - 1.2, AVENUE_Z + AVENUE_HALF + 1.2]) {
-        if (Math.abs(x) < 10) continue;
-        lampList.push(new Matrix4().makeTranslation(x, 4.5, z));
-        headList.push(new Matrix4().makeTranslation(x, 9, z + (z < AVENUE_Z ? 1.2 : -1.2)));
-      }
-    }
-    return { dashList, zebraList, lampList, headList };
-  }, []);
-  useLayoutEffect(() => {
-    setInstances(dashes.current, data.dashList);
-    setInstances(zebra.current, data.zebraList);
-    setInstances(lamps.current, data.lampList);
-    setInstances(heads.current, data.headList);
-  }, [data]);
-  const { mats, tints } = useMemo(() => {
-    const mats = {
-      ground: new MeshStandardMaterial({ roughness: 1 }),
-      plaza: new MeshStandardMaterial({ roughness: 0.55, metalness: 0.15 }),
-      road: new MeshStandardMaterial({ roughness: 0.45, metalness: 0.25 }),
-      curb: new MeshStandardMaterial({ roughness: 0.8 }),
-    };
-    const tints = [
-      dayTint(mats.ground, '#0a0c11', '#46474a'),
-      dayTint(mats.plaza, '#1b1d23', '#9a958d'),
-      dayTint(mats.road, '#121419', '#3c3e42'),
-      dayTint(mats.curb, '#2a2c33', '#a29d94'),
-    ];
-    return { mats, tints };
-  }, []);
-  useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
-  useFrame(() => applyDayTints(tints));
-
-  return (
-    <group>
-      <mesh rotation-x={-Math.PI / 2} position={[0, -0.06, 0]} material={mats.ground}>
-        <planeGeometry args={[2400, 2400]} />
-      </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0, (AVENUE_Z - AVENUE_HALF - 40) / 2]} material={mats.plaza}>
-        <planeGeometry args={[110, AVENUE_Z - AVENUE_HALF + 40]} />
-      </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[0, 0.02, AVENUE_Z]} material={mats.road}>
-        <planeGeometry args={[ROAD_HALF * 2, AVENUE_HALF * 2]} />
-      </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[SIDE_X, 0.045, 0]} material={mats.road}>
-        <planeGeometry args={[10, ROAD_HALF * 2]} />
-      </mesh>
-      {[AVENUE_Z - AVENUE_HALF - 1.6, AVENUE_Z + AVENUE_HALF + 1.6].map((z) => (
-        <mesh key={z} position={[0, 0.09, z]} material={mats.curb}>
-          <boxGeometry args={[ROAD_HALF * 2, 0.18, 3.2]} />
-        </mesh>
-      ))}
-      <instancedMesh ref={dashes} args={[undefined, undefined, data.dashList.length]}>
-        <boxGeometry args={[1, 0.01, 1]} />
-        <meshBasicMaterial color="#9a9682" polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
-      </instancedMesh>
-      <instancedMesh ref={zebra} args={[undefined, undefined, data.zebraList.length]}>
-        <boxGeometry args={[1, 0.01, 1]} />
-        <meshBasicMaterial color="#d9d6cc" polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
-      </instancedMesh>
-      <instancedMesh ref={lamps} args={[undefined, undefined, data.lampList.length]}>
-        <cylinderGeometry args={[0.09, 0.14, 9, 8]} />
-        <meshStandardMaterial color="#2b2e35" metalness={0.7} roughness={0.4} />
-      </instancedMesh>
-      <instancedMesh ref={heads} args={[undefined, undefined, data.headList.length]}>
-        <boxGeometry args={[0.5, 0.18, 1.4]} />
-        <meshBasicMaterial color={LAMP_HEAD} toneMapped={false} />
-      </instancedMesh>
-    </group>
-  );
-}
-
-type CarPart = { geometry: BufferGeometry; material: Material; paint: boolean };
-
-function carParts(scene: Object3D): CarPart[] {
-  scene.updateMatrixWorld(true);
-  const parts: CarPart[] = [];
-  scene.traverse((o) => {
-    const mesh = o as Mesh;
-    if (!mesh.isMesh) return;
-    const src = mesh.material as MeshStandardMaterial;
-    const paint = /car ?paint|carpiant/i.test(src.name);
-    const material = src.clone();
-    if (paint) {
-      material.color.set('#ffffff');
-      material.metalness = 0.6;
-      material.roughness = 0.28;
-    }
-    parts.push({ geometry: mesh.geometry.clone().applyMatrix4(mesh.matrixWorld), material, paint });
-  });
-  return parts;
-}
-
-type Lane = { axis: 'x' | 'z'; at: number; dir: 1 | -1; stops: boolean };
-const LANES: Lane[] = [
-  { axis: 'x', at: AVENUE_Z + 1.9, dir: 1, stops: true },
-  { axis: 'x', at: AVENUE_Z + 5.5, dir: 1, stops: true },
-  { axis: 'x', at: AVENUE_Z - 1.9, dir: -1, stops: true },
-  { axis: 'x', at: AVENUE_Z - 5.5, dir: -1, stops: true },
-  { axis: 'z', at: SIDE_X - 2.2, dir: 1, stops: false },
-  { axis: 'z', at: SIDE_X + 2.2, dir: -1, stops: false },
-];
-const CARS_PER_LANE = 6;
-const PAINTS = ['#f2b705', '#f2b705', '#f2b705', '#e8e8ea', '#111214', '#b0131e', '#1d4fd6', '#ff6a00', '#2fbf71', '#6d28d9'];
-const LAMP_FRONT = new Color('#fff6e0').multiplyScalar(3);
-const LAMP_REAR = new Color('#ff1a1a').multiplyScalar(2.6);
-
-/** True while someone on foot is about to cross or is crossing in front of the entrance. */
-export function crossingRed(): boolean {
-  return WALK.street && Math.abs(WALK.x) < CROSSWALK.x + 6 && WALK.z > AVENUE_Z - AVENUE_HALF - 9 && WALK.z < AVENUE_Z + AVENUE_HALF + 9;
-}
-
-/** Where a car in this lane must stop for the walker, or null when the way is clear. */
-function stopPointFor(lane: Lane): { at: number; grace: number } | null {
-  if (!lane.stops || !WALK.street) return null;
-  if (crossingRed()) return { at: -lane.dir * CROSSWALK.stopLine, grace: 0.5 };
-  if (Math.abs(WALK.z - AVENUE_Z) < AVENUE_HALF + 2.5) return { at: WALK.x - lane.dir * 7, grace: 6 };
-  return null;
-}
-
-/** Cars from the two models, yellow cabs among them; avenue traffic stops for a walker at the crossing or on the road. */
-function Traffic() {
-  const a = useGLTF(TRAFFIC_A_URL, DRACO_PATH);
-  const b = useGLTF(TRAFFIC_B_URL, DRACO_PATH);
-  const models = useMemo(() => [carParts(a.scene), carParts(b.scene)], [a.scene, b.scene]);
-  const lampGeo = useMemo(() => {
-    const box = () => new BoxGeometry(0.32, 0.12, 0.06);
-    return {
-      front: mergeGeometries([box().translate(-0.68, 0.72, 2.38), box().translate(0.68, 0.72, 2.38)])!,
-      rear: mergeGeometries([box().translate(-0.68, 0.85, -2.3), box().translate(0.68, 0.85, -2.3)])!,
-    };
-  }, []);
-  useEffect(
-    () => () => {
-      lampGeo.front.dispose();
-      lampGeo.rear.dispose();
-    },
-    [lampGeo],
-  );
-  const cars = useMemo(() => {
-    const rnd = seededRandom(31);
-    return LANES.flatMap((_, li) =>
-      Array.from({ length: CARS_PER_LANE }, (__, k) => ({
-        li,
-        model: rnd() < 0.62 ? 0 : 1,
-        pos: -ROAD_HALF + ((k + rnd() * 0.5) * 2 * ROAD_HALF) / CARS_PER_LANE,
-        cruise: 11 + rnd() * 6,
-        speed: 12,
-        paint: PAINTS[Math.floor(rnd() * PAINTS.length)]!,
-      })),
-    );
-  }, []);
-  const byLane = useMemo(() => LANES.map((_, li) => cars.filter((c) => c.li === li)), [cars]);
-  const byModel = useMemo(() => [cars.filter((c) => c.model === 0), cars.filter((c) => c.model === 1)], [cars]);
-  const meshes = useRef<(InstancedMesh | null)[][]>([[], []]);
-  const lamps = useRef<(InstancedMesh | null)[]>([]);
-
-  useLayoutEffect(() => {
-    const c = new Color();
-    models.forEach((parts, mi) =>
-      parts.forEach((p, pi) => {
-        const mesh = meshes.current[mi]?.[pi];
-        if (!mesh || !p.paint) return;
-        byModel[mi]!.forEach((car, i) => mesh.setColorAt(i, c.set(car.paint)));
-        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-      }),
-    );
-  }, [models, byModel]);
-
-  const up = useMemo(() => new Vector3(0, 1, 0), []);
-  useFrame((_, rawDelta) => {
-    const delta = Math.min(rawDelta, 0.1);
-    LANES.forEach((lane, li) => {
-      const laneCars = byLane[li]!;
-      const stop = stopPointFor(lane);
-      for (const car of laneCars) {
-        let gap = Infinity;
-        for (const other of laneCars) {
-          if (other === car) continue;
-          let d = (other.pos - car.pos) * lane.dir;
-          if (d < 0) d += ROAD_HALF * 2;
-          gap = Math.min(gap, d);
-        }
-        let target = Math.min(car.cruise, Math.max(0, (gap - 7.5) * 1.2));
-        if (stop) {
-          const d = (stop.at - car.pos) * lane.dir;
-          if (d > -stop.grace && d < 40) target = Math.min(target, Math.max(0, (d - 2.6) * 0.9));
-        }
-        car.speed += (target - car.speed) * Math.min(1, delta * (target < car.speed ? 3.5 : 1.2));
-        car.pos += lane.dir * car.speed * delta;
-        if (car.pos > ROAD_HALF) car.pos -= ROAD_HALF * 2;
-        if (car.pos < -ROAD_HALF) car.pos += ROAD_HALF * 2;
-      }
-    });
-    let li = 0;
-    byModel.forEach((list, mi) => {
-      const parts = meshes.current[mi] ?? [];
-      list.forEach((car, i) => {
-        const lane = LANES[car.li]!;
-        const angle = lane.axis === 'x' ? (lane.dir === 1 ? Math.PI / 2 : -Math.PI / 2) : lane.dir === 1 ? 0 : Math.PI;
-        _q.setFromAxisAngle(up, angle);
-        if (lane.axis === 'x') _p.set(car.pos, 0.02, lane.at);
-        else _p.set(lane.at, 0.045, car.pos);
-        _m.compose(_p, _q, _s.set(1, 1, 1));
-        for (const mesh of parts) mesh?.setMatrixAt(i, _m);
-        for (const mesh of lamps.current) mesh?.setMatrixAt(li, _m);
-        li++;
-      });
-      for (const mesh of parts) if (mesh) mesh.instanceMatrix.needsUpdate = true;
-    });
-    for (const mesh of lamps.current) if (mesh) mesh.instanceMatrix.needsUpdate = true;
-  });
-
-  return (
-    <group>
-      {models.map((parts, mi) =>
-        parts.map((p, pi) => (
-          <instancedMesh
-            key={`${mi}-${pi}`}
-            ref={(m) => {
-              meshes.current[mi]![pi] = m;
-            }}
-            args={[p.geometry, p.material, Math.max(1, byModel[mi]!.length)]}
-            frustumCulled={false}
-          />
-        )),
-      )}
-      {[
-        { g: lampGeo.front, c: LAMP_FRONT },
-        { g: lampGeo.rear, c: LAMP_REAR },
-      ].map((l, i) => (
-        <instancedMesh
-          key={i}
-          ref={(m) => {
-            lamps.current[i] = m;
-          }}
-          args={[l.g, undefined, cars.length]}
-          frustumCulled={false}
-        >
-          <meshBasicMaterial color={l.c} toneMapped={false} />
-        </instancedMesh>
-      ))}
-    </group>
-  );
-}
-
-const SIG_RED = new Color('#ff2020').multiplyScalar(3);
-const SIG_GREEN = new Color('#20ff70').multiplyScalar(2.4);
-const SIG_WALK = new Color('#f5f5f5').multiplyScalar(2.4);
-const SIG_DIM = new Color('#141414');
-
-/** Pedestrian signals and car lights at the crossing; they follow the walker. */
-function Signals() {
-  const mats = useMemo(
-    () => ({
-      red: new MeshBasicMaterial({ color: SIG_DIM, toneMapped: false }),
-      green: new MeshBasicMaterial({ color: SIG_GREEN, toneMapped: false }),
-      walk: new MeshBasicMaterial({ color: SIG_DIM, toneMapped: false }),
-    }),
-    [],
-  );
-  useEffect(() => () => Object.values(mats).forEach((m) => m.dispose()), [mats]);
-  useFrame(() => {
-    const red = crossingRed();
-    mats.red.color.copy(red ? SIG_RED : SIG_DIM);
-    mats.green.color.copy(red ? SIG_DIM : SIG_GREEN);
-    mats.walk.color.copy(red ? SIG_WALK : SIG_DIM);
-  });
-  const poles: [number, number, number][] = [
-    [CROSSWALK.x + 2.2, 0, AVENUE_Z - AVENUE_HALF - 1],
-    [-CROSSWALK.x - 2.2, 0, AVENUE_Z + AVENUE_HALF + 1],
-  ];
-  return (
-    <group>
-      {poles.map((p, i) => (
-        <group key={i} position={p} rotation-y={i === 0 ? 0 : Math.PI}>
-          <mesh position={[0, 3, 0]}>
-            <cylinderGeometry args={[0.1, 0.12, 6, 8]} />
-            <meshStandardMaterial color="#25272d" metalness={0.6} roughness={0.4} />
-          </mesh>
-          <mesh position={[0, 5.4, 0.25]}>
-            <boxGeometry args={[0.45, 1.3, 0.35]} />
-            <meshStandardMaterial color="#14151a" roughness={0.6} />
-          </mesh>
-          <mesh position={[0, 5.8, 0.45]} material={mats.red}>
-            <sphereGeometry args={[0.14, 12, 8]} />
-          </mesh>
-          <mesh position={[0, 5.0, 0.45]} material={mats.green}>
-            <sphereGeometry args={[0.14, 12, 8]} />
-          </mesh>
-          <mesh position={[0, 2.6, -0.2]} material={mats.walk}>
-            <boxGeometry args={[0.4, 0.4, 0.12]} />
-          </mesh>
-        </group>
-      ))}
-    </group>
-  );
+/** Grid streets stay off the modelled blocks (they bring their own streets), the tower's plaza and the neighbour's lot. */
+function gridBlocked(x: number, z: number): boolean {
+  if (inNyc(x, z, 2)) return true;
+  if (Math.abs(x) < 56 && z > -36 && z < AVENUE_Z - AVENUE_HALF) return true;
+  return Math.abs(x - NEIGHBOUR_AT[0]) < 34 && Math.abs(z - NEIGHBOUR_AT[2]) < 30;
 }
 
 export function City() {
+  const strips = useMemo(() => gridStrips(gridBlocked), []);
   return (
     <group>
-      <Streets />
+      <Streets strips={strips} />
+      <GridStreets strips={strips} />
       <Skyline />
       <Landmarks />
       <RiverAndBridge />
       <FarSkyline />
       <Signals />
       <Traffic />
+      <RoadSigns />
     </group>
   );
 }

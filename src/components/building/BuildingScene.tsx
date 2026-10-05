@@ -9,9 +9,9 @@ import { BUILDING_URL, CLEAR_HEIGHT, FLOOR_COUNT, PLATE, PROGRAM_COPY, ROOF_Y, f
 import { DRACO_PATH } from '@/components/three/desk-model';
 import { KIT_URL, extractKit } from '@/components/three/kit-model';
 import { Atmosphere } from './atmosphere';
-import { City, NEIGHBOUR_AT, TRAFFIC_A_URL, TRAFFIC_B_URL, fadeByDay } from './city';
+import { City, GOBLIN_URL, NEIGHBOUR_AT, SIGNS_URL, TRAFFIC_A_URL, fadeByDay } from './city';
 import { Entrance, HERO_CAR_URL } from './entrance';
-import { EXEC_URL, Furnishing, Interior, LOUNGE_URL } from './interior';
+import { EXEC_URL, Furnishing, Interior, LOUNGE_URL, MEET_URL } from './interior';
 import { buildLayout, type Layout } from './layout';
 import { NYC_URL, NycBlocks, liftOverNyc } from './nyc';
 import { CLIP, CLIP_PLANES, CUT, WALK } from './shared';
@@ -431,8 +431,10 @@ export default function BuildingScene({
 useGLTF.preload(BUILDING_URL, DRACO_PATH);
 useGLTF.preload(KIT_URL, DRACO_PATH);
 useGLTF.preload(TRAFFIC_A_URL, DRACO_PATH);
-useGLTF.preload(TRAFFIC_B_URL, DRACO_PATH);
 useGLTF.preload(HERO_CAR_URL, DRACO_PATH);
 useGLTF.preload(NYC_URL, DRACO_PATH);
 useGLTF.preload(EXEC_URL, DRACO_PATH);
 useGLTF.preload(LOUNGE_URL, DRACO_PATH);
+useGLTF.preload(MEET_URL, DRACO_PATH);
+useGLTF.preload(GOBLIN_URL, DRACO_PATH);
+useGLTF.preload(SIGNS_URL, DRACO_PATH);
