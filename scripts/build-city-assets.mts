@@ -10,6 +10,10 @@
  *   public/models/car-goblin.glb   Fictional supercar - V12 Goblin by ollitei
  *   public/models/car-revuelto.glb Lamborghini Revuelto by DRIVER-FIRE, badges removed
  *   public/models/spacehub-traffic-a.glb  the owner's car1.glb (no attribution needed), badges removed
+ *   public/models/lobby-plants.glb    Office Plants pack LOWPOLY by EFX: three boxwood shapes
+ *   public/models/lobby-fountain.glb  Zsolnay Fountain by georgiyhazankin: basin and jets
+ *   public/models/lobby-reception.glb Reception by Arbin4444: the marble counter only
+ *   public/models/lobby-elevator.glb  Elevator with Animation LOWPOLY by EFX: the call panel only
  *
  * Only the pieces the scene uses are kept; textures become WebP, dense meshes are simplified, and
  * geometry is Draco-compressed (decoder self-hosted under /draco).
@@ -131,6 +135,8 @@ type BuildOpts = {
   dropMaterials?: RegExp;
   /** Mesh nodes whose name matches are removed. */
   dropNodes?: RegExp;
+  /** With `crop`: also drops nodes wider than this (floor and ceiling slabs whose slivers pass the crop). */
+  maxEdge?: number;
   /** Materials that become dark, see-through window glass (three.js does not render the source glass shaders). */
   glass?: RegExp;
   fit?: Fit;
@@ -153,6 +159,13 @@ async function build(file: string, out: string, opts: BuildOpts) {
     }
   }
   if (opts.dropNodes) for (const node of doc.getRoot().listNodes()) if (opts.dropNodes.test(node.getName())) node.dispose();
+  if (opts.maxEdge) {
+    for (const node of doc.getRoot().listNodes()) {
+      if (!node.getMesh()) continue;
+      const b = getBounds(node);
+      if (Math.max(b.max[0] - b.min[0], b.max[2] - b.min[2]) > opts.maxEdge * 4) node.dispose();
+    }
+  }
   if (opts.glass) {
     for (const m of doc.getRoot().listMaterials()) {
       if (!opts.glass.test(m.getName())) continue;
@@ -226,6 +239,34 @@ async function main() {
     keep: [{ match: /^car_(?!shadow)/, as: 'Car' }],
     fit: { turn: Math.PI, length: 4.6 },
     merge: true,
+  });
+  await build('reception.glb', 'lobby-reception.glb', {
+    maxTexture: 1024,
+    keep: [{ match: /./, as: 'Reception', simplify: 0.3, crop: (x, y, z) => x > -3.6 && x < 3.8 && y > -0.1 && y < 1.15 && z > -8.92 && z < -7.4 }],
+    maxEdge: 2,
+    fit: { turn: Math.PI, length: 6.6 },
+    merge: true,
+  });
+  await build('office_plants_pack_lowpoly.glb', 'lobby-plants.glb', {
+    maxTexture: 512,
+    keep: [
+      { match: /^Boxwood1_/, as: 'PlantBall' },
+      { match: /^Boxwood4_/, as: 'PlantCone' },
+      { match: /^boxwood3_/, as: 'PlantHedge' },
+    ],
+    fit: { turn: 0, length: 9.2 },
+  });
+  await build('zsolnay_fountain.glb', 'lobby-fountain.glb', {
+    maxTexture: 1024,
+    keep: [
+      { match: /^Mesh_0/, as: 'Basin', simplify: 0.12 },
+      { match: /^BezierCurve/, as: 'Jets', simplify: 0.4 },
+    ],
+    fit: { turn: 0, length: 8.6 },
+  });
+  await build('elevator_with_animation_lowpoly.glb', 'lobby-elevator.glb', {
+    maxTexture: 1024,
+    keep: [{ match: /^(OutsideButtons|ScreenOutside)_/, as: 'ElevPanel' }],
   });
   await build('car1.glb', 'spacehub-traffic-a.glb', {
     maxTexture: 512,

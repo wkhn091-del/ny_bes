@@ -6,13 +6,25 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { CanvasTexture, Color, type Group, type InstancedMesh, Matrix4, type Mesh, MeshStandardMaterial, SRGBColorSpace, ShaderMaterial } from 'three';
 import { COLUMNS, COLUMN_SIZE, CORE, DOOR, ELEVATOR, FRONT_PIERS, LOBBY, PLINTH } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
+import type { KitPart } from '@/components/three/kit-model';
 import { AVENUE_HALF, AVENUE_Z, CROSSWALK } from './city';
+import { ModelInstances } from './interior';
 import { rectAt, type Rect } from './layout';
+import { LOUNGE_URL, disposeGroups, groupsOf } from './realistic';
 import { SIGN_SPOTS } from './roads';
-import { WALK } from './shared';
+import { type Item, WALK } from './shared';
+import { SKY } from './sky';
 
 /** The Lamborghini Revuelto (see streets.tsx for the credit); the podium shows the same model the traffic uses. */
 export const HERO_CAR_URL = '/models/car-revuelto.glb';
+/** "Reception" by Arbin4444 (CC-BY-4.0): only the marble counter. */
+export const RECEPTION_URL = '/models/lobby-reception.glb';
+/** "Office Plants pack LOWPOLY" by EFX (CC-BY-4.0): ball and cone topiary, hedge planter. */
+export const PLANTS_URL = '/models/lobby-plants.glb';
+/** "Zsolnay Fountain" by georgiyhazankin (CC-BY-4.0), simplified. */
+export const FOUNTAIN_URL = '/models/lobby-fountain.glb';
+/** "Elevator with Animation LOWPOLY" by EFX (CC-BY-4.0): only the call buttons and floor display. */
+export const ELEVATOR_URL = '/models/lobby-elevator.glb';
 
 const CANOPY = { x: 7, z0: 15, z1: 27, y: 6.3 };
 const CANOPY_POSTS: [number, number][] = [
@@ -21,7 +33,7 @@ const CANOPY_POSTS: [number, number][] = [
 ];
 const RUNWAY_ZS = Array.from({ length: 7 }, (_, i) => 28 + i * 2);
 const RUNWAY_X = 4.5;
-const POOL = { x: -16, z: 34, r: 4.5 };
+const POOL = { x: -16, z: 34, r: 4.3 };
 const PODIUM = { x: 16, z: 34, r: 4 };
 const TREES: [number, number][] = [
   [-27, 24],
@@ -31,15 +43,25 @@ const TREES: [number, number][] = [
   [27, 32],
   [27, 40],
 ];
-const RECEPTION = { x: -13, z: 3, w: 7, d: 1.3 };
-const LOBBY_SOFAS: [number, number, number][] = [
-  [13, 3.6, 0],
-  [13, 8.4, Math.PI],
+const RECEPTION = { x: -13, z: 3, w: 6.6, d: 1.5 };
+const HEDGES: [number, number][] = [
+  [-27, 28],
+  [-27, 36],
+  [27, 28],
+  [27, 36],
 ];
-const LOBBY_TABLE = { x: 13, z: 6 };
+const DOOR_PLANTS: [number, number][] = [
+  [-4.6, 12.4],
+  [4.6, 12.4],
+];
+/** Two lifts side by side across the core's front, each with a 1.9 m opening. */
+const LIFTS = [ELEVATOR.x0 + 1.75, ELEVATOR.x1 - 1.75];
+const LIFT = { w: 1.9, h: 2.8 };
+/** Centred in the column bay between x 15.5–24.5 and z 4.5–13.5. */
+const LOUNGE = { x: 20, z: 9, w: 6.4, d: 4 };
 const LOBBY_PLANTS: [number, number][] = [
   [-20, 10],
-  [20, 10],
+  [11, 9],
   [-29, 0],
   [29, 0],
 ];
@@ -68,7 +90,7 @@ export function streetObstacles(): Rect[] {
     { x0: PLINTH.stepsHalfX, x1: 40, z0: PLINTH.frontZ - 0.1, z1: PLINTH.frontZ + 0.3 },
     { x0: -40, x1: -PLINTH.stepsHalfX, z0: PLINTH.frontZ - 0.1, z1: PLINTH.frontZ + 0.3 },
     rectAt(RECEPTION.x, RECEPTION.z, RECEPTION.w, RECEPTION.d),
-    rectAt(LOBBY_TABLE.x, LOBBY_TABLE.z, 1.4, 1.4),
+    rectAt(LOUNGE.x, LOUNGE.z, LOUNGE.w, LOUNGE.d),
     rectAt(POOL.x, POOL.z, POOL.r * 2, POOL.r * 2),
     rectAt(PODIUM.x, PODIUM.z, PODIUM.r * 2, PODIUM.r * 2),
   ];
@@ -77,8 +99,8 @@ export function streetObstacles(): Rect[] {
   for (const [x, z] of CANOPY_POSTS) rects.push(rectAt(x, z, 0.5, 0.5));
   for (const z of RUNWAY_ZS) for (const x of [-RUNWAY_X, RUNWAY_X]) rects.push(rectAt(x, z, 0.3, 0.3));
   for (const [x, z] of TREES) rects.push(rectAt(x, z, 1.6, 1.6));
-  for (const [x, z] of LOBBY_SOFAS) rects.push(rectAt(x, z, 3, 1));
-  for (const [x, z] of LOBBY_PLANTS) rects.push(rectAt(x, z, 0.8, 0.8));
+  for (const [x, z] of [...LOBBY_PLANTS, ...DOOR_PLANTS]) rects.push(rectAt(x, z, 0.8, 0.8));
+  for (const [x, z] of HEDGES) rects.push(rectAt(x, z, 0.9, 2.6));
   for (const [x, z] of [...SIGNAL_POLES, ...STREET_LAMPS]) rects.push(rectAt(x, z, 0.3, 0.3));
   for (const s of SIGN_SPOTS) rects.push(rectAt(s.x, s.z, 0.4, 0.4));
   return rects;
@@ -261,58 +283,123 @@ function Runway() {
   );
 }
 
-const POOL_LED = new Color('#7fc8ff').multiplyScalar(2.2);
-const JET = new Color('#cfeaff').multiplyScalar(1.6);
-
-/** A round pool with dancing jets and a lit rim. */
+/** The Zsolnay fountain on the plaza, with a moving water surface inside its stone basin. */
 function Fountain() {
-  const jets = useRef<(Mesh | null)[]>([]);
+  const { scene } = useGLTF(FOUNTAIN_URL, DRACO_PATH);
+  const model = useMemo(() => scene.clone(true), [scene]);
   const water = useRef<MeshStandardMaterial>(null);
-  const layout = useMemo(
-    () => [
-      { x: 0, z: 0, h: 4.2, r: 0.12 },
-      ...Array.from({ length: 8 }, (_, i) => ({ x: Math.cos((i / 8) * Math.PI * 2) * 2.4, z: Math.sin((i / 8) * Math.PI * 2) * 2.4, h: 1.8, r: 0.06 })),
-    ],
-    [],
-  );
   useFrame(({ clock }) => {
-    const t = clock.elapsedTime;
-    jets.current.forEach((m, i) => {
-      if (!m) return;
-      const k = 0.65 + 0.35 * Math.sin(t * 2.2 + i * 0.9);
-      m.scale.y = k;
-      m.position.y = 0.45 + (layout[i]!.h * k) / 2;
-    });
-    if (water.current) water.current.emissiveIntensity = 0.55 + 0.2 * Math.sin(t * 3.1);
+    if (water.current) water.current.emissiveIntensity = (0.16 + 0.06 * Math.sin(clock.elapsedTime * 2.3)) * (1 - SKY.day * 0.7);
   });
   return (
     <group position={[POOL.x, 0, POOL.z]}>
-      <mesh position={[0, 0.25, 0]}>
-        <cylinderGeometry args={[POOL.r, POOL.r + 0.1, 0.5, 48, 1, true]} />
-        <meshStandardMaterial color="#d9d4ca" roughness={0.6} side={2} />
+      <primitive object={model} />
+      <mesh position={[0, WATER_Y, 0]} rotation-x={-Math.PI / 2}>
+        <circleGeometry args={[POOL.r * 0.86, 64]} />
+        <meshStandardMaterial ref={water} color="#1d4b5e" emissive="#2f8fd0" metalness={0.6} roughness={0.06} transparent opacity={0.88} />
       </mesh>
-      <mesh position={[0, 0.51, 0]} rotation-x={-Math.PI / 2}>
-        <torusGeometry args={[POOL.r, 0.06, 8, 64]} />
-        <meshBasicMaterial color={POOL_LED} toneMapped={false} />
-      </mesh>
-      <mesh position={[0, 0.42, 0]} rotation-x={-Math.PI / 2}>
-        <circleGeometry args={[POOL.r - 0.05, 48]} />
-        <meshStandardMaterial ref={water} color="#0b2a4a" emissive="#1e6fd6" emissiveIntensity={0.6} metalness={0.9} roughness={0.08} />
-      </mesh>
-      {layout.map((j, i) => (
-        <mesh
-          key={i}
-          ref={(m) => {
-            jets.current[i] = m;
-          }}
-          position={[j.x, 0.45 + j.h / 2, j.z]}
-        >
-          <cylinderGeometry args={[j.r * 0.4, j.r, j.h, 8]} />
-          <meshBasicMaterial color={JET} transparent opacity={0.55} toneMapped={false} depthWrite={false} />
-        </mesh>
+    </group>
+  );
+}
+const WATER_Y = 0.32;
+
+/** Brushed steel lift doors that slide apart while someone stands at the lifts, with the call panel and floor display. */
+function Lifts() {
+  const { scene } = useGLTF(ELEVATOR_URL, DRACO_PATH);
+  const panels = useMemo(() => LIFTS.map(() => scene.clone(true)), [scene]);
+  const doors = useRef<(Group | null)[]>([]);
+  const open = useRef(0);
+  useFrame((_, delta) => {
+    const near = WALK.street && WALK.x > ELEVATOR_ZONE.x0 - 1 && WALK.x < ELEVATOR_ZONE.x1 + 1 && WALK.z < ELEVATOR_ZONE.z1 + 1.5;
+    open.current += ((near ? 1 : 0) - open.current) * Math.min(1, delta * 2.5);
+    doors.current.forEach((d, i) => {
+      if (d) d.position.x = (i % 2 === 0 ? -1 : 1) * (LIFT.w / 4 + open.current * (LIFT.w / 2 - 0.05));
+    });
+  });
+  const y = LOBBY.floor;
+  return (
+    <group>
+      {LIFTS.map((x, li) => (
+        <group key={x} position={[x, y, ELEVATOR.z]}>
+          <mesh position={[0, LIFT.h / 2, 0.02]}>
+            <boxGeometry args={[LIFT.w, LIFT.h, 0.04]} />
+            <meshStandardMaterial color="#0c0d10" roughness={0.9} />
+          </mesh>
+          {[0, 1].map((k) => (
+            <group
+              key={k}
+              ref={(g) => {
+                doors.current[li * 2 + k] = g;
+              }}
+            >
+              <mesh position={[0, LIFT.h / 2, 0.08]}>
+                <boxGeometry args={[LIFT.w / 2, LIFT.h, 0.05]} />
+                <meshStandardMaterial color="#b9bcc2" metalness={0.92} roughness={0.32} />
+              </mesh>
+            </group>
+          ))}
+          {[-1, 1].map((s) => (
+            <mesh key={s} position={[s * (LIFT.w / 2 + 0.06), LIFT.h / 2 + 0.06, 0.09]}>
+              <boxGeometry args={[0.12, LIFT.h + 0.12, 0.1]} />
+              <meshStandardMaterial color="#8d9097" metalness={0.9} roughness={0.25} />
+            </mesh>
+          ))}
+          <mesh position={[0, LIFT.h + 0.06, 0.09]}>
+            <boxGeometry args={[LIFT.w + 0.24, 0.12, 0.1]} />
+            <meshStandardMaterial color="#8d9097" metalness={0.9} roughness={0.25} />
+          </mesh>
+          <primitive object={panels[li]!} position={[0, 0, -1.12]} />
+        </group>
       ))}
     </group>
   );
+}
+
+function PlantParts({ parts, items }: { parts: KitPart[] | undefined; items: Item[] }) {
+  return parts?.map((p, i) => <ModelInstances key={i} geometry={p.geometry} material={p.material} items={items} />);
+}
+
+/** Topiary in the lobby and on the plaza, hedge planters between the plaza trees. */
+function Plants() {
+  const { scene } = useGLTF(PLANTS_URL, DRACO_PATH);
+  const g = useMemo(() => groupsOf(scene), [scene]);
+  useEffect(() => () => disposeGroups(g), [g]);
+  const items = useMemo(() => {
+    const at = (list: [number, number][], y: number, s = 1): Item[] => list.map(([x, z]) => ({ f: -1, x, z, y, sx: s, sy: s, sz: s }));
+    return {
+      cones: [...at(LOBBY_PLANTS, LOBBY.floor), ...at(TREES, 0.7, 1.7)],
+      balls: at(DOOR_PLANTS, LOBBY.floor, 0.9),
+      hedges: at(HEDGES, 0),
+    };
+  }, []);
+  return (
+    <>
+      <PlantParts parts={g.PlantCone} items={items.cones} />
+      <PlantParts parts={g.PlantBall} items={items.balls} />
+      <PlantParts parts={g.PlantHedge} items={items.hedges} />
+    </>
+  );
+}
+
+/** The loft's leather lounge (sofa, coffee table and rug) as the lobby's waiting area. */
+function LobbySofas() {
+  const { scene } = useGLTF(LOUNGE_URL, DRACO_PATH);
+  const g = useMemo(() => groupsOf(scene), [scene]);
+  useEffect(() => () => disposeGroups(g), [g]);
+  const items = useMemo((): Item[] => [{ f: -1, x: LOUNGE.x, z: LOUNGE.z, y: LOBBY.floor, r: Math.PI }], []);
+  const vases = useMemo((): Item[] => [-3.2, 3.2].map((dx) => ({ f: -1, x: LOUNGE.x + dx, z: LOUNGE.z - 1, y: LOBBY.floor })), []);
+  return (
+    <>
+      <PlantParts parts={g.SofaSet} items={items} />
+      <PlantParts parts={g.LoftPlant} items={vases} />
+    </>
+  );
+}
+
+function ReceptionDesk() {
+  const { scene } = useGLTF(RECEPTION_URL, DRACO_PATH);
+  const model = useMemo(() => scene.clone(true), [scene]);
+  return <primitive object={model} position={[RECEPTION.x, LOBBY.floor, RECEPTION.z]} />;
 }
 
 /** The hero car on a slowly turning podium with an LED ring and its own light. */
@@ -351,14 +438,6 @@ function Trees() {
           <mesh position={[0, 0.35, 0]}>
             <boxGeometry args={[1.6, 0.7, 1.6]} />
             <meshStandardMaterial color="#26272d" roughness={0.7} />
-          </mesh>
-          <mesh position={[0, 1.8, 0]}>
-            <cylinderGeometry args={[0.12, 0.16, 2.4, 8]} />
-            <meshStandardMaterial color="#3b2c21" roughness={0.9} />
-          </mesh>
-          <mesh position={[0, 3.6, 0]}>
-            <icosahedronGeometry args={[1.6, 1]} />
-            <meshStandardMaterial color="#244d2c" roughness={0.85} flatShading />
           </mesh>
           <mesh position={[0, 0.72, 0]}>
             <boxGeometry args={[1.62, 0.04, 1.62]} />
@@ -412,48 +491,6 @@ function Lobby() {
       <mesh position={[(ELEVATOR.x0 + ELEVATOR.x1) / 2, y + 4.5, ELEVATOR.z + 0.06]} material={wall}>
         <planeGeometry args={[ELEVATOR.x1 - ELEVATOR.x0 + 2, 3]} />
       </mesh>
-      <group position={[RECEPTION.x, y, RECEPTION.z]}>
-        <mesh position={[0, 0.55, 0]}>
-          <boxGeometry args={[RECEPTION.w, 1.1, RECEPTION.d]} />
-          <meshStandardMaterial color="#e9e4dc" roughness={0.3} />
-        </mesh>
-        <mesh position={[0, 1.13, 0]}>
-          <boxGeometry args={[RECEPTION.w + 0.2, 0.06, RECEPTION.d + 0.2]} />
-          <meshStandardMaterial color="#2b2b31" roughness={0.25} metalness={0.4} />
-        </mesh>
-        <mesh position={[0, 0.12, RECEPTION.d / 2 + 0.01]}>
-          <boxGeometry args={[RECEPTION.w, 0.04, 0.02]} />
-          <meshBasicMaterial color={LED} toneMapped={false} />
-        </mesh>
-      </group>
-      {LOBBY_SOFAS.map(([x, z, r]) => (
-        <group key={z} position={[x, y, z]} rotation-y={r}>
-          <mesh position={[0, 0.25, 0]}>
-            <boxGeometry args={[3, 0.5, 1]} />
-            <meshStandardMaterial color="#3d3368" roughness={0.9} />
-          </mesh>
-          <mesh position={[0, 0.65, -0.4]}>
-            <boxGeometry args={[3, 0.8, 0.2]} />
-            <meshStandardMaterial color="#3d3368" roughness={0.9} />
-          </mesh>
-        </group>
-      ))}
-      <mesh position={[LOBBY_TABLE.x, y + 0.22, LOBBY_TABLE.z]}>
-        <cylinderGeometry args={[0.7, 0.7, 0.44, 32]} />
-        <meshStandardMaterial color="#6b5a45" roughness={0.5} />
-      </mesh>
-      {LOBBY_PLANTS.map(([x, z]) => (
-        <group key={`${x}:${z}`} position={[x, y, z]}>
-          <mesh position={[0, 0.3, 0]}>
-            <cylinderGeometry args={[0.35, 0.28, 0.6, 16]} />
-            <meshStandardMaterial color="#2b2b30" roughness={0.6} />
-          </mesh>
-          <mesh position={[0, 1.3, 0]}>
-            <icosahedronGeometry args={[0.65, 1]} />
-            <meshStandardMaterial color="#2f6b3a" roughness={0.8} flatShading />
-          </mesh>
-        </group>
-      ))}
       {[-3, 3, 9].map((z) => (
         <mesh key={z} position={[0, LOBBY.ceiling - 0.08, z]}>
           <boxGeometry args={[LOBBY.x * 2 - 4, 0.04, 0.12]} />
@@ -473,7 +510,11 @@ export function Entrance() {
       <Runway />
       <Fountain />
       <Trees />
+      <Plants />
       <Lobby />
+      <ReceptionDesk />
+      <LobbySofas />
+      <Lifts />
       <HeroCar />
     </group>
   );

@@ -16,8 +16,8 @@ export const LOUNGE_URL = '/models/loft-lounge.glb';
 /** "Meeting room" by Titank (CC-BY-4.0): boardroom table with twelve chairs, long side along X. */
 export const MEET_URL = '/models/meeting-set.glb';
 
-/** Group names written by scripts/build-city-assets.mts: `<Group>_<n>`. */
-const GROUP_NAME = /^([A-Z][A-Za-z]+)_\d+$/;
+/** Group names written by scripts/build-city-assets.mts: `<Group>_<n>`; GLTFLoader suffixes repeated names with `_<k>`. */
+const GROUP_NAME = /^([A-Z][A-Za-z]+)_\d+(?:_\d+)?$/;
 
 export type Groups = Partial<Record<string, KitPart[]>>;
 
