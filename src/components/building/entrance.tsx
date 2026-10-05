@@ -4,7 +4,7 @@ import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { CanvasTexture, Color, DoubleSide, type Group, type Object3D, type InstancedMesh, type Material, Matrix4, type Mesh, MeshStandardMaterial, SRGBColorSpace, ShaderMaterial } from 'three';
-import { COLUMNS, COLUMN_SIZE, CORE, DOOR, ELEVATOR, FRONT_PIERS, LOBBY, PLINTH } from '@/components/three/building-model';
+import { CLEAR_HEIGHT, COLUMNS, COLUMN_SIZE, CORE, DOOR, ELEVATOR, FRONT_PIERS, LOBBY, PLINTH, floorY } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
 import type { KitPart } from '@/components/three/kit-model';
 import { AVENUE_HALF, AVENUE_Z, CROSSWALK, SIDE_X } from './city';
@@ -14,6 +14,7 @@ import { LOUNGE_URL, disposeGroups, groupsOf } from './realistic';
 import { SIGN_SPOTS } from './roads';
 import { type Item, WALK } from './shared';
 import { SKY } from './sky';
+import { WALK_SIGNAL } from './walk-signal';
 
 /** The Lamborghini Revuelto (see streets.tsx for the credit); the podium shows the same model the traffic uses. */
 export const HERO_CAR_URL = '/models/car-revuelto.glb';
@@ -84,6 +85,24 @@ const CABS = [
 const CAB_Z = CAB_FRONT_Z - 1.21 * CAB_SCALE;
 const CAB_INNER = { z0: CAB_Z - 1.37 * CAB_SCALE, z1: CAB_Z + 0.97 * CAB_SCALE };
 const BANK = { x0: -2.3, x1: 6.3 };
+/** On the office floors one cabin stands against the core face, between the coffee bar and the column at x 6.5. */
+const FLOOR_CAB = (() => {
+  const door = 4.4;
+  const front = CORE.z1 + 2.4;
+  const z = front - 1.21 * CAB_SCALE;
+  return {
+    door,
+    front,
+    z,
+    x0: door - 3.05 * CAB_SCALE,
+    x1: door + 1.35 * CAB_SCALE,
+    ix0: door - 2.91 * CAB_SCALE,
+    ix1: door + 1.11 * CAB_SCALE,
+    iz0: z - 1.37 * CAB_SCALE,
+    iz1: z + 0.97 * CAB_SCALE,
+    half: 0.95 * CAB_SCALE,
+  };
+})();
 /** Centred in the column bays between |x| 15.5–24.5 and z 4.5–13.5, either side of the entrance. */
 const LOUNGES = [
   { x: 20, z: 9, w: 6.4, d: 4 },
@@ -128,6 +147,30 @@ export function elevatorRoute(fromX: number, fromZ: number): { x: number; z: num
   if (fromZ > LOBBY.glassZ) route.push({ x: 0, z: 27 }, { x: 0, z: 16 }, { x: 0, z: 10 });
   route.push({ x: cab.door, z: CAB_FRONT_Z + 1.6 }, { x: cab.door, z: (CAB_INNER.z0 + CAB_INNER.z1) / 2 });
   return route;
+}
+/** Inside the floor cabin; standing here offers the floor picker on an office floor. */
+export const FLOOR_LIFT_ZONE: Rect = { x0: FLOOR_CAB.ix0, x1: FLOOR_CAB.ix1, z0: FLOOR_CAB.iz0, z1: FLOOR_CAB.iz1 };
+/** Where you stand after a ride: in the middle of the cabin, by its doors. */
+export const LIFT_ARRIVAL = {
+  lobby: { x: CABS[1]!.door, z: (CAB_INNER.z0 + CAB_INNER.z1) / 2 + 0.2 },
+  floor: { x: FLOOR_CAB.door, z: (FLOOR_CAB.iz0 + FLOOR_CAB.iz1) / 2 + 0.2 },
+};
+/** From anywhere on a floor to the cabin: out to the aisle in front of the bar, then in through the doors. */
+export function floorLiftRoute(fromX: number, fromZ: number): { x: number; z: number }[] {
+  const route: { x: number; z: number }[] = [];
+  if (fromZ < FLOOR_CAB.front) route.push({ x: fromX, z: FLOOR_CAB.front + 1.1 });
+  route.push({ x: FLOOR_CAB.door, z: FLOOR_CAB.front + 1.1 }, { x: FLOOR_CAB.door, z: (FLOOR_CAB.iz0 + FLOOR_CAB.iz1) / 2 });
+  return route;
+}
+/** The floor cabin's walls, with a gap for its doors. */
+export function floorLiftRects(): Rect[] {
+  const c = FLOOR_CAB;
+  return [
+    { x0: c.x0, x1: c.door - c.half, z0: c.front - 0.2, z1: c.front + 0.05 },
+    { x0: c.door + c.half, x1: c.x1, z0: c.front - 0.2, z1: c.front + 0.05 },
+    { x0: c.x0, x1: c.ix0, z0: CORE.z1, z1: c.front },
+    { x0: c.ix1, x1: c.x1, z0: CORE.z1, z1: c.front },
+  ];
 }
 /** The entrance as a tap target: the canopy, the runway and the doors. */
 export const ENTRANCE_TAP: Rect = { x0: -7, x1: 7, z0: LOBBY.glassZ - 1, z1: 30 };
@@ -381,27 +424,29 @@ function slideDoors(cabin: Object3D, open: number) {
   });
 }
 
-/** The two walk-in cabins; each opens as you come up to its door or stand inside it. */
+function cloneCabin(scene: Object3D): Object3D {
+  const c = scene.clone(true);
+  c.traverse((o) => {
+    if (/^Door[LR]/.test(o.name)) o.userData.closedX = o.position.x;
+    const mesh = o as Mesh;
+    if (mesh.isMesh && (mesh.material as Material).name === 'WallPaper') mesh.material = BRONZE;
+  });
+  return c;
+}
+
+/** The two walk-in cabins; each opens as you come up to its door or stand inside it, and stays shut during a ride. */
 function Lifts() {
   const { scene } = useGLTF(ELEVATOR_URL, DRACO_PATH);
-  const cabins = useMemo(
-    () =>
-      CABS.map(() => {
-        const c = scene.clone(true);
-        c.traverse((o) => {
-          if (/^Door[LR]/.test(o.name)) o.userData.closedX = o.position.x;
-          const mesh = o as Mesh;
-          if (mesh.isMesh && (mesh.material as Material).name === 'WallPaper') mesh.material = BRONZE;
-        });
-        return c;
-      }),
-    [scene],
-  );
+  const cabins = useMemo(() => CABS.map(() => cloneCabin(scene)), [scene]);
   const open = useRef(CABS.map(() => 0));
   useFrame((_, delta) => {
     CABS.forEach((c, i) => {
       const near =
-        WALK.street && Math.abs(WALK.x - c.door) < (WALK.z < CAB_FRONT_Z ? 2.2 : 1.8) && WALK.z > CAB_INNER.z0 - 0.5 && WALK.z < CAB_FRONT_Z + 2.6;
+        !WALK_SIGNAL.riding &&
+        WALK.street &&
+        Math.abs(WALK.x - c.door) < (WALK.z < CAB_FRONT_Z ? 2.2 : 1.8) &&
+        WALK.z > CAB_INNER.z0 - 0.5 &&
+        WALK.z < CAB_FRONT_Z + 2.6;
       const k = open.current[i]! + ((near ? 1 : 0) - open.current[i]!) * Math.min(1, delta * 2.2);
       open.current[i] = k;
       slideDoors(cabins[i]!, k);
@@ -434,6 +479,58 @@ function Lifts() {
         <meshStandardMaterial color="#d9d5cd" roughness={0.45} />
       </mesh>
     </group>
+  );
+}
+
+/** The cabin on the floor you are walking, clad in the lobby's stone up to the ceiling. */
+export function FloorLift({ floor }: { floor: number }) {
+  const { scene } = useGLTF(ELEVATOR_URL, DRACO_PATH);
+  const cabin = useMemo(() => cloneCabin(scene), [scene]);
+  const open = useRef(0);
+  useFrame((_, delta) => {
+    const c = FLOOR_CAB;
+    const near =
+      !WALK_SIGNAL.riding && !WALK.street && Math.abs(WALK.x - c.door) < (WALK.z < c.front ? 2.2 : 1.8) && WALK.z > c.iz0 - 0.5 && WALK.z < c.front + 2.6;
+    open.current += ((near ? 1 : 0) - open.current) * Math.min(1, delta * 2.2);
+    slideDoors(cabin, open.current);
+  });
+  const c = FLOOR_CAB;
+  const y = floorY(floor);
+  const top = 3.21 * CAB_SCALE;
+  const depth = c.front - CORE.z1;
+  return (
+    <group position={[0, y, 0]}>
+      <group position={[c.door, 0, c.z]} scale={CAB_SCALE}>
+        <primitive object={cabin} />
+      </group>
+      <mesh position={[(c.x0 + c.x1) / 2, (top + CLEAR_HEIGHT) / 2, c.front - 0.1]}>
+        <boxGeometry args={[c.x1 - c.x0 + 0.3, CLEAR_HEIGHT - top, 0.2]} />
+        <meshStandardMaterial color="#d9d5cd" roughness={0.45} />
+      </mesh>
+      {[c.x0, c.x1].map((x) => (
+        <mesh key={x} position={[x, CLEAR_HEIGHT / 2, CORE.z1 + depth / 2]}>
+          <boxGeometry args={[0.3, CLEAR_HEIGHT, depth]} />
+          <meshStandardMaterial color="#d9d5cd" roughness={0.45} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/**
+ * The floor cabin's ceiling light. Always mounted, dark when no floor is walked, because adding or
+ * removing a light makes three.js recompile every material in the city.
+ */
+export function FloorLiftLight({ floor }: { floor: number | null }) {
+  const c = FLOOR_CAB;
+  return (
+    <pointLight
+      position={[c.door - 0.9 * CAB_SCALE, (floor === null ? 0 : floorY(floor)) + 2.6 * CAB_SCALE, c.z - 0.2 * CAB_SCALE]}
+      color="#fff1dc"
+      intensity={floor === null ? 0 : 6}
+      distance={4.5}
+      decay={1.6}
+    />
   );
 }
 

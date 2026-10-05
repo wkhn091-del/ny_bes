@@ -6,7 +6,18 @@ import { type PerspectiveCamera, Vector3 } from 'three';
 import { LOBBY, PLATE, ROOF_Y, floorY, groundY } from '@/components/three/building-model';
 import { bindLookControls, clamp, fovFor, keyDirection, yawToward, type LookState } from '@/components/three/first-person';
 import { AVENUE_Z } from './city';
-import { ELEVATOR_ZONE, ENTRANCE_TAP, LOBBY_SPAWN, STREET_BOUNDS, elevatorRoute, streetObstacles } from './entrance';
+import {
+  ELEVATOR_ZONE,
+  ENTRANCE_TAP,
+  FLOOR_LIFT_ZONE,
+  LIFT_ARRIVAL,
+  LOBBY_SPAWN,
+  STREET_BOUNDS,
+  elevatorRoute,
+  floorLiftRects,
+  floorLiftRoute,
+  streetObstacles,
+} from './entrance';
 import { keepWalkable, obstaclesFor, type Layout } from './layout';
 import { NYC_TOP, inNyc } from './nyc';
 import { WALK } from './shared';
@@ -64,7 +75,11 @@ const FACE_OUT = Math.PI;
  */
 export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layout; onElevator: (at: boolean) => void }) {
   const el = useThree((st) => st.gl.domElement);
-  const blocked = useMemo(() => (zone === 'street' ? { rects: STREET_RECTS, bounds: STREET_BOUNDS } : obstaclesFor(layout, zone)), [layout, zone]);
+  const blocked = useMemo(() => {
+    if (zone === 'street') return { rects: STREET_RECTS, bounds: STREET_BOUNDS };
+    const floor = obstaclesFor(layout, zone);
+    return { rects: [...floor.rects, ...floorLiftRects()], bounds: floor.bounds };
+  }, [layout, zone]);
   const nav = useRef<WalkNav>({
     pos: new Vector3(),
     path: [],
@@ -119,7 +134,15 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
       } else {
         n.flying = false;
         n.snap = true;
-        if (street) {
+        n.auto = false;
+        if (WALK_SIGNAL.arrive) {
+          WALK_SIGNAL.arrive = false;
+          const at = street ? LIFT_ARRIVAL.lobby : LIFT_ARRIVAL.floor;
+          n.pos.set(at.x, eyeAt(zone, at.x, at.z), at.z);
+          n.yaw = FACE_OUT;
+          n.yawGoal = null;
+          n.pitch = -0.05;
+        } else if (street) {
           n.pos.set(LOBBY_SPAWN.x, LOBBY.floor + EYE, LOBBY_SPAWN.z);
           n.yaw = Math.PI;
           n.pitch = -0.05;
@@ -136,12 +159,16 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
     else look.set(ARRIVAL_LOOK.x, floorY(zone) + EYE - 0.5, ARRIVAL_LOOK.z);
 
     const p = n.pos;
-    if (WALK_SIGNAL.goElevator && !street) WALK_SIGNAL.goElevator = false;
     if (WALK_SIGNAL.goElevator && !n.flying) {
       WALK_SIGNAL.goElevator = false;
       n.keys.clear();
-      n.path = elevatorRoute(p.x, p.z).map((q) => new Vector3(q.x, 0, q.z));
+      n.path = (street ? elevatorRoute(p.x, p.z) : floorLiftRoute(p.x, p.z)).map((q) => new Vector3(q.x, 0, q.z));
       n.auto = true;
+    }
+    if (WALK_SIGNAL.riding) {
+      n.keys.clear();
+      n.path = [];
+      n.auto = false;
     }
     if (n.auto && !n.flying) {
       const next = n.path[0];
@@ -202,7 +229,7 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
     WALK.x = p.x;
     WALK.z = p.z;
     WALK.inside = !street && p.z < PLATE.z - 0.3 && Math.abs(p.y - eyeAt(zone, p.x, p.z)) < 2;
-    const atElevator = street && !n.flying && inRect(p.x, p.z, ELEVATOR_ZONE);
+    const atElevator = !n.flying && inRect(p.x, p.z, street ? ELEVATOR_ZONE : FLOOR_LIFT_ZONE);
     if (atElevator !== n.atElevator) {
       n.atElevator = atElevator;
       onElevator(atElevator);
@@ -221,12 +248,13 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
     } else {
       cam.position.lerp(p, 1 - Math.exp(-delta * (n.flying ? 20 : 8)));
     }
+    if (WALK_SIGNAL.riding) cam.position.y += Math.sin(state.clock.elapsedTime * 31) * 0.0025;
     cam.rotation.set(n.pitch, n.yaw, 0);
   });
 
   const onGroundClick = (e: ThreeEvent<MouseEvent>) => {
     const n = nav.current;
-    if (n.flying || e.delta > 6) return;
+    if (n.flying || WALK_SIGNAL.riding || e.delta > 6) return;
     e.stopPropagation();
     n.keys.clear();
     if (zone === 'street' && n.pos.z > LOBBY.glassZ + 0.5 && inRect(e.point.x, e.point.z, ENTRANCE_TAP)) {

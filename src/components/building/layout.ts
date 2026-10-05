@@ -149,13 +149,13 @@ export function buildLayout(): Layout {
       }
     }
 
-    // Lounge and coffee bar in front of the core.
+    // Lounge and coffee bar in front of the core; the bar keeps left of the lift cabin (x 1.7–5.6).
     for (const x of [-4.2, 0, 4.2]) L.sofas.push({ f, x, z: 9.2 });
     for (const x of [-3, 3]) L.sofas.push({ f, x, z: 12.2, r: Math.PI });
     L.lounge.push({ f, x: 0, z: 10.7 });
     L.rugs.push({ f, x: 0, z: 10.7, k: f % 3 });
-    L.bars.push({ f, x: 0, z: 5.4 });
-    for (let i = 0; i < 5; i++) L.stools.push({ f, x: -2.4 + i * 1.2, z: 6.25 });
+    L.bars.push({ f, x: -2.9, z: 5.4 });
+    for (let i = 0; i < 4; i++) L.stools.push({ f, x: -4.7 + i * 1.2, z: 6.25 });
     for (const x of [-5.8, 5.8]) L.plants.push({ f, x, z: 12.6, s: 1.2 });
 
     for (let x = -33; x <= 33; x += 3) {

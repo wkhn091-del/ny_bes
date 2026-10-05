@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { ArrowRight, ArrowUpDown, Box, Clock, DoorOpen, Footprints, Hand, LogOut, Maximize2, Minimize2, Moon, Music, SkipForward, Sun, VolumeX } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, ArrowUpDown, Box, Clock, DoorOpen, Footprints, Hand, LogOut, Maximize2, Minimize2, Moon, Music, SkipForward, Sun, VolumeX } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -33,6 +33,14 @@ function moodFor(mode: SkyMode, station: Station): Mood {
 export const BUILDING_POSTER = '/images/renders/building-poster.webp';
 
 const FLOORS_TOP_DOWN = Array.from({ length: FLOOR_COUNT }, (_, k) => FLOOR_COUNT - 1 - k);
+
+/** A trip in the cabin you are standing in; `null` is the lobby. */
+type Ride = { from: number | null; to: number | null };
+const LOBBY_LEVEL = -1;
+const levelOf = (i: number | null) => i ?? LOBBY_LEVEL;
+const levelLabel = (level: number) => (level === LOBBY_LEVEL ? 'L' : String(level + 1));
+/** Doors take about a second to close before the cabin moves. */
+const DOORS_MS = 1200;
 const chip = 'rounded-full bg-black/60 text-white backdrop-blur';
 
 export function BuildingShowcase({ className }: { className?: string }) {
@@ -45,6 +53,8 @@ export function BuildingShowcase({ className }: { className?: string }) {
   const [walking, setWalking] = useState(false);
   const [elevatorTrips, setElevatorTrips] = useState(0);
   const [atElevator, setAtElevator] = useState(false);
+  const [ride, setRide] = useState<Ride | null>(null);
+  const [rideLevel, setRideLevel] = useState(LOBBY_LEVEL);
   const [skyMode, setSkyMode] = useState<SkyMode>('auto');
   const [music, setMusic] = useState(false);
   const [track, setTrack] = useState<Track | null>(null);
@@ -77,27 +87,69 @@ export function BuildingShowcase({ className }: { className?: string }) {
   const choose = useCallback(
     (i: number | null) => {
       if (walking) {
-        if (i !== selected) {
-          setSelected(i);
-          setElevatorTrips((t) => t + 1);
+        if (i === selected || ride) return;
+        if (atElevator) {
+          WALK_SIGNAL.riding = true;
+          setRideLevel(levelOf(selected));
+          setRide({ from: selected, to: i });
+          return;
         }
+        setSelected(i);
+        setElevatorTrips((t) => t + 1);
         return;
       }
       setSelected(i === selected ? null : i);
     },
-    [walking, selected],
+    [walking, selected, ride, atElevator],
   );
+
+  const leaveWalk = useCallback(() => {
+    setWalking(false);
+    setRide(null);
+    WALK_SIGNAL.arrive = false;
+  }, []);
+
+  useEffect(() => {
+    if (!ride) return;
+    const from = levelOf(ride.from);
+    const to = levelOf(ride.to);
+    const steps = Math.abs(to - from);
+    const stepMs = Math.min(650, Math.max(110, 2600 / steps));
+    const arrive = DOORS_MS + steps * stepMs + 250;
+    const start = performance.now();
+    let shown = from;
+    let arrived = false;
+    let raf = 0;
+    const tick = (now: number) => {
+      const t = now - start;
+      const level = from + Math.sign(to - from) * Math.min(steps, Math.max(0, Math.floor((t - DOORS_MS) / stepMs)));
+      if (level !== shown) setRideLevel((shown = level));
+      if (!arrived && t >= arrive) {
+        arrived = true;
+        WALK_SIGNAL.arrive = true;
+        setSelected(ride.to);
+      }
+      if (t >= arrive + 450) WALK_SIGNAL.riding = false;
+      if (t >= arrive + 1500) setRide(null);
+      else raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      WALK_SIGNAL.riding = false;
+    };
+  }, [ride]);
 
   useEffect(() => {
     if ((selected === null && !walking) || isFull) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      if (walking) setWalking(false);
+      if (walking) leaveWalk();
       else setSelected(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selected, walking, isFull]);
+  }, [selected, walking, isFull, leaveWalk]);
 
   const program = selected === null ? null : programOf(selected);
   const copy = program ? PROGRAM_COPY[program] : null;
@@ -136,12 +188,61 @@ export function BuildingShowcase({ className }: { className?: string }) {
           className={clsx('absolute inset-0 transition-opacity duration-(--dur-reveal) ease-(--ease-out)', ready ? 'opacity-100' : 'opacity-0')}
           aria-hidden="true"
         >
-          <BuildingScene active={near} selected={selected} walking={walking} onSelect={choose} onReady={onReady} onElevator={onElevator} skyMode={skyMode} />
+          <BuildingScene active={near} selected={selected} walking={walking} onSelect={choose} onReady={onReady} onElevator={onElevator} skyMode={skyMode} rideTo={ride ? ride.to : null} />
         </div>
       )}
 
       {walking && elevatorTrips > 0 && (
         <div key={elevatorTrips} className="pointer-events-none absolute inset-0 animate-[elevator-fade_0.7s_ease-out_forwards] bg-black" aria-hidden="true" />
+      )}
+      {walking && ride && (
+        <div
+          role="status"
+          className="pointer-events-none absolute left-1/2 top-16 flex -translate-x-1/2 flex-col items-center gap-1 rounded-2xl border border-white/10 bg-black/85 px-6 py-2.5 text-white shadow-2xl backdrop-blur"
+        >
+          <span dir="ltr" className="flex items-center gap-2 font-mono text-4xl font-bold tabular-nums text-amber-300 [text-shadow:0_0_12px_rgba(252,211,77,0.6)]">
+            {levelOf(ride.to) > levelOf(ride.from) ? <ArrowUp className="h-7 w-7" aria-hidden="true" /> : <ArrowDown className="h-7 w-7" aria-hidden="true" />}
+            {levelLabel(rideLevel)}
+          </span>
+          <span className="text-2xs text-white/75">
+            {rideLevel === levelOf(ride.to) ? 'הגעתם · הדלתות נפתחות' : `בדרך ל${ride.to === null ? 'לובי' : `קומה ${ride.to + 1}`}`}
+          </span>
+        </div>
+      )}
+      {walking && !ride && !atElevator && (
+        <button
+          type="button"
+          onClick={() => {
+            WALK_SIGNAL.goElevator = true;
+          }}
+          className={clsx(
+            'absolute right-3 flex items-center gap-1.5 rounded-full bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition-transform hover:scale-[1.03] active:scale-[0.97] sm:bottom-4 sm:right-4',
+            selected === null ? 'bottom-16' : 'bottom-40',
+          )}
+        >
+          <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+          למעלית
+        </button>
+      )}
+      {walking && !ride && atElevator && (
+        <section
+          aria-label="לוח המעלית"
+          className="absolute left-1/2 top-1/2 w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-black/80 p-3 text-white shadow-2xl backdrop-blur-md"
+        >
+          <p className="flex items-center justify-center gap-1.5 text-sm font-bold">
+            <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+            אתם במעלית · בחרו קומה
+          </p>
+          <div className="mt-2.5 grid grid-cols-6 gap-1">
+            {selected !== null && (
+              <button type="button" onClick={() => choose(null)} className="h-8 rounded-md bg-white/10 text-xs font-semibold text-white/80 hover:bg-white/20 hover:text-white">
+                לובי
+              </button>
+            )}
+            {Array.from({ length: FLOOR_COUNT }, (_, i) => floorButton(i, 'h-8 text-xs'))}
+          </div>
+          <p className="mt-2 text-center text-3xs text-white/60">או הקישו על הרצפה בחוץ כדי לצאת</p>
+        </section>
       )}
       <span className={clsx(chip, 'pointer-events-none absolute left-3 top-3 px-2.5 py-1 text-xs font-medium')}>הדמיה</span>
       {capable && ready && supported && (
@@ -282,36 +383,10 @@ export function BuildingShowcase({ className }: { className?: string }) {
               <span className="hidden sm:inline">הקישו על הכניסה, או לכו בעצמכם · W A S D או לחיצה על הקרקע</span>
             </span>
           </div>
-          {!atElevator && (
-            <button
-              type="button"
-              onClick={() => {
-                WALK_SIGNAL.goElevator = true;
-              }}
-              className="absolute bottom-16 right-3 flex items-center gap-1.5 rounded-full bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition-transform hover:scale-[1.03] active:scale-[0.97] sm:bottom-4 sm:right-4"
-            >
-              <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
-              למעלית
-            </button>
-          )}
-          {atElevator && (
-            <section
-              aria-live="polite"
-              className="absolute left-1/2 top-1/2 w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-black/80 p-3 text-white shadow-2xl backdrop-blur-md"
-            >
-              <p className="flex items-center justify-center gap-1.5 text-sm font-bold">
-                <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
-                המעלית כאן · בחרו קומה
-              </p>
-              <div className="mt-2.5 grid grid-cols-6 gap-1">
-                {Array.from({ length: FLOOR_COUNT }, (_, i) => floorButton(i, 'h-8 text-xs'))}
-              </div>
-            </section>
-          )}
           <div className="absolute bottom-16 left-3 sm:bottom-4 sm:left-4">
             <button
               type="button"
-              onClick={() => setWalking(false)}
+              onClick={leaveWalk}
               className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-xs font-semibold text-zinc-950 shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.97]"
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
@@ -336,7 +411,7 @@ export function BuildingShowcase({ className }: { className?: string }) {
           <div className="absolute bottom-16 left-3 flex flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
             <button
               type="button"
-              onClick={() => setWalking(false)}
+              onClick={leaveWalk}
               className="flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-xs font-semibold text-zinc-950 shadow-lg transition-transform hover:scale-[1.03] active:scale-[0.97]"
             >
               <LogOut className="h-3.5 w-3.5" aria-hidden="true" />

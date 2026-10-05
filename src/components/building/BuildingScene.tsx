@@ -10,7 +10,7 @@ import { DRACO_PATH } from '@/components/three/desk-model';
 import { KIT_URL } from '@/components/three/kit-model';
 import { Atmosphere } from './atmosphere';
 import { City, GOBLIN_URL, NEIGHBOUR_AT, SIGNS_URL, TRAFFIC_A_URL, fadeByDay } from './city';
-import { ELEVATOR_URL, Entrance, FOUNTAIN_URL, HERO_CAR_URL, PLANTS_URL, RECEPTION_URL, TREE_URL, WAITING_URL } from './entrance';
+import { ELEVATOR_URL, Entrance, FloorLift, FloorLiftLight, FOUNTAIN_URL, HERO_CAR_URL, PLANTS_URL, RECEPTION_URL, TREE_URL, WAITING_URL } from './entrance';
 import { EXEC_URL, Furnishing, Interior, LOUNGE_URL, MEET_URL } from './interior';
 import { buildLayout, type Layout } from './layout';
 import { NYC_TOWER_URL, NYC_URL, NycBlocks, NycTower, liftOverNyc } from './nyc';
@@ -375,6 +375,7 @@ export default function BuildingScene({
   onReady,
   onElevator,
   skyMode,
+  rideTo,
 }: {
   active: boolean;
   selected: number | null;
@@ -383,6 +384,8 @@ export default function BuildingScene({
   onReady: () => void;
   onElevator: (at: boolean) => void;
   skyMode: SkyMode;
+  /** The floor a ride is heading to, so its cabin is already standing when you arrive. */
+  rideTo: number | null;
 }) {
   const layout = useMemo(() => buildLayout(), []);
   return (
@@ -422,6 +425,8 @@ export default function BuildingScene({
         <Crown />
         {!walking && <FloorHits selected={selected} onSelect={onSelect} />}
         {walking && <WalkRig zone={selected ?? 'street'} layout={layout} onElevator={onElevator} />}
+        {walking && [...new Set([selected, rideTo])].map((f) => f !== null && <FloorLift key={f} floor={f} />)}
+        <FloorLiftLight floor={walking ? selected : null} />
         <SelectedFloorLights selected={selected} />
         <CutawayAnimator selected={selected} walking={walking} />
         <Ready onReady={onReady} />
