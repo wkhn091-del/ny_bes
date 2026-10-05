@@ -90,6 +90,14 @@ export const CREDITS: Credit[] = [
     authorUrl: 'https://sketchfab.com/evan4129',
     source: 'https://sketchfab.com/3d-models/elevator-with-animation-lowpoly-7c53a9a7db554e9da8dececfd3eac339',
     ...CC_BY_4,
-    use: 'לוח הכפתורים של המעליות בלובי (הדלתות נבנו בקוד)',
+    use: 'שתי המעליות בלובי: התא, הדלתות הנפתחות ולוחות הכפתורים (החזית בגוון ברונזה)',
+  },
+  {
+    title: 'Reception',
+    author: 'Arbin4444',
+    authorUrl: 'https://sketchfab.com/digilife4444',
+    source: 'https://sketchfab.com/3d-models/reception-25f7f98f09344d4abcbf20655715bc1c',
+    ...CC_BY_4,
+    use: 'שורות הספות ושולחנות הקפה לאורך קירות הלובי (הריהוט בלבד, מופשט)',
   },
 ];

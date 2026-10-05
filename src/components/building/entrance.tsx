@@ -25,6 +25,8 @@ export const PLANTS_URL = '/models/lobby-plants.glb';
 export const FOUNTAIN_URL = '/models/lobby-fountain.glb';
 /** "Elevator with Animation LOWPOLY" by EFX (CC-BY-4.0): only the call buttons and floor display. */
 export const ELEVATOR_URL = '/models/lobby-elevator.glb';
+/** "Reception" by Arbin4444 (CC-BY-4.0, the larger lounge scene): only the row of sofas and coffee tables. */
+export const WAITING_URL = '/models/lobby-waiting.glb';
 /** One street tree cut from "New York City" by golukumar (CC-BY-4.0), see nyc.tsx. */
 export const TREE_URL = '/models/nyc-tree.glb';
 
@@ -95,6 +97,11 @@ const LOBBY_PLANTS: [number, number][] = [
   [-29, 9],
   [29, 9],
 ];
+/** The long sofa rows along both side walls, backs just clear of the wall columns, facing the middle. */
+const WAITING_ROWS = [
+  { x: -32, r: -Math.PI / 2 },
+  { x: 32, r: Math.PI / 2 },
+].map((w) => ({ ...w, z: 3.3, len: 17.9, depth: 2.1 }));
 /** Either side of the lift bank. */
 const LIFT_PLANTS: [number, number][] = [
   [BANK.x0 - 0.7, CAB_FRONT_Z + 0.7],
@@ -137,6 +144,7 @@ export function streetObstacles(): Rect[] {
     { x0: -40, x1: -PLINTH.stepsHalfX, z0: PLINTH.frontZ - 0.1, z1: PLINTH.frontZ + 0.3 },
     rectAt(RECEPTION.x, RECEPTION.z, RECEPTION.w, RECEPTION.d),
     ...LOUNGES.map((l) => rectAt(l.x, l.z, l.w, l.d)),
+    ...WAITING_ROWS.map((w) => rectAt(w.x, w.z, w.depth, w.len)),
     rectAt(POOL.x, POOL.z, POOL.r * 2, POOL.r * 2),
     rectAt(PODIUM.x, PODIUM.z, PODIUM.r * 2, PODIUM.r * 2),
   ];
@@ -473,6 +481,14 @@ function LobbySofas() {
   );
 }
 
+function WaitingRows() {
+  const { scene } = useGLTF(WAITING_URL, DRACO_PATH);
+  const g = useMemo(() => groupsOf(scene), [scene]);
+  useEffect(() => () => disposeGroups(g), [g]);
+  const items = useMemo((): Item[] => WAITING_ROWS.map((w) => ({ f: -1, x: w.x, z: w.z, y: LOBBY.floor, r: w.r })), []);
+  return <PlantParts parts={g.Waiting} items={items} />;
+}
+
 function ReceptionDesk() {
   const { scene } = useGLTF(RECEPTION_URL, DRACO_PATH);
   const model = useMemo(() => scene.clone(true), [scene]);
@@ -609,6 +625,7 @@ export function Entrance() {
       <Lobby />
       <ReceptionDesk />
       <LobbySofas />
+      <WaitingRows />
       <Lifts />
       <HeroCar />
     </group>

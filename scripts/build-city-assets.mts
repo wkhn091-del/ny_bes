@@ -44,7 +44,7 @@ import sharp from 'sharp';
 const SRC = process.env.CITY_ASSETS_SRC ?? join(process.env.USERPROFILE ?? process.env.HOME ?? '.', 'Downloads');
 const OUT = resolve(process.cwd(), 'public/models');
 
-type Keep = { match: RegExp; as: string; simplify?: number; only?: number; crop?: (x: number, y: number, z: number) => boolean };
+type Keep = { match: RegExp; as: string; simplify?: number; error?: number; only?: number; crop?: (x: number, y: number, z: number) => boolean };
 /** Turn about Y (radians) applied first, then a uniform scale so the longest horizontal side is `length` metres, centred on the footprint and standing on y = 0. */
 type Fit = { turn: number; length: number };
 
@@ -76,7 +76,7 @@ function keepOnly(doc: Document, keep: Keep[]) {
     seen.set(rule, n + 1);
     node.setName(`${rule.as}_${n}`);
     if (rule.crop) for (const prim of mesh.listPrimitives()) cropPrimitive(prim, rule.crop);
-    if (rule.simplify) for (const prim of mesh.listPrimitives()) simplifyPrimitive(prim, { simplifier: MeshoptSimplifier, ratio: rule.simplify, error: 0.002 });
+    if (rule.simplify) for (const prim of mesh.listPrimitives()) simplifyPrimitive(prim, { simplifier: MeshoptSimplifier, ratio: rule.simplify, error: rule.error ?? 0.002 });
     kept.add(node);
   }
   for (const node of doc.getRoot().listNodes()) {
@@ -260,6 +260,12 @@ async function main() {
     keep: [{ match: /./, as: 'Reception', simplify: 0.3, crop: (x, y, z) => x > -3.6 && x < 3.8 && y > -0.1 && y < 1.15 && z > -8.92 && z < -7.4 }],
     maxEdge: 2,
     fit: { turn: Math.PI, length: 6.6 },
+    merge: true,
+  });
+  await build('reception (1).glb', 'lobby-waiting.glb', {
+    maxTexture: 1024,
+    keep: [{ match: /./, as: 'Waiting', simplify: 0.05, error: 0.01, crop: (x, y, z) => x > -9.9 && x < 8 && z > 20.6 && z < 22.85 && y > 0.02 && y < 0.95 }],
+    maxEdge: 2.5,
     merge: true,
   });
   await build('office_plants_pack_lowpoly.glb', 'lobby-plants.glb', {
