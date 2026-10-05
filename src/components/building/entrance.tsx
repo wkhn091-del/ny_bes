@@ -66,13 +66,23 @@ const DOOR_PLANTS: [number, number][] = [
 /** Two lifts side by side across the core's front, each with a 1.9 m opening. */
 const LIFTS = [ELEVATOR.x0 + 1.75, ELEVATOR.x1 - 1.75];
 const LIFT = { w: 1.9, h: 2.8 };
-/** Centred in the column bay between x 15.5–24.5 and z 4.5–13.5. */
-const LOUNGE = { x: 20, z: 9, w: 6.4, d: 4 };
+/** Centred in the column bays between |x| 15.5–24.5 and z 4.5–13.5, either side of the entrance. */
+const LOUNGES = [
+  { x: 20, z: 9, w: 6.4, d: 4 },
+  { x: -20, z: 9, w: 6.4, d: 4 },
+];
 const LOBBY_PLANTS: [number, number][] = [
-  [-20, 10],
+  [-11, 9],
   [11, 9],
   [-29, 0],
   [29, 0],
+  [-29, 9],
+  [29, 9],
+];
+/** Either side of the lift doors. */
+const LIFT_PLANTS: [number, number][] = [
+  [ELEVATOR.x0 - 0.8, ELEVATOR.z + 0.6],
+  [ELEVATOR.x1 + 0.8, ELEVATOR.z + 0.6],
 ];
 const SIGNAL_POLES: [number, number][] = [
   [CROSSWALK.x + 2.2, AVENUE_Z - AVENUE_HALF - 1],
@@ -99,7 +109,7 @@ export function streetObstacles(): Rect[] {
     { x0: PLINTH.stepsHalfX, x1: 40, z0: PLINTH.frontZ - 0.1, z1: PLINTH.frontZ + 0.3 },
     { x0: -40, x1: -PLINTH.stepsHalfX, z0: PLINTH.frontZ - 0.1, z1: PLINTH.frontZ + 0.3 },
     rectAt(RECEPTION.x, RECEPTION.z, RECEPTION.w, RECEPTION.d),
-    rectAt(LOUNGE.x, LOUNGE.z, LOUNGE.w, LOUNGE.d),
+    ...LOUNGES.map((l) => rectAt(l.x, l.z, l.w, l.d)),
     rectAt(POOL.x, POOL.z, POOL.r * 2, POOL.r * 2),
     rectAt(PODIUM.x, PODIUM.z, PODIUM.r * 2, PODIUM.r * 2),
   ];
@@ -109,7 +119,7 @@ export function streetObstacles(): Rect[] {
   for (const z of RUNWAY_ZS) for (const x of [-RUNWAY_X, RUNWAY_X]) rects.push(rectAt(x, z, 0.3, 0.3));
   for (const [x, z] of TREES) rects.push(rectAt(x, z, 1.6, 1.6));
   for (const [x, z] of AVENUE_TREES) if (Math.abs(x) < 40) rects.push(rectAt(x, z, 0.6, 0.6));
-  for (const [x, z] of [...LOBBY_PLANTS, ...DOOR_PLANTS]) rects.push(rectAt(x, z, 0.8, 0.8));
+  for (const [x, z] of [...LOBBY_PLANTS, ...DOOR_PLANTS, ...LIFT_PLANTS]) rects.push(rectAt(x, z, 0.8, 0.8));
   for (const [x, z] of HEDGES) rects.push(rectAt(x, z, 0.9, 2.6));
   for (const [x, z] of [...SIGNAL_POLES, ...STREET_LAMPS]) rects.push(rectAt(x, z, 0.3, 0.3));
   for (const s of SIGN_SPOTS) rects.push(rectAt(s.x, s.z, 0.4, 0.4));
@@ -378,7 +388,7 @@ function Plants() {
     const at = (list: [number, number][], y: number, s = 1): Item[] => list.map(([x, z]) => ({ f: -1, x, z, y, sx: s, sy: s, sz: s }));
     return {
       cones: at(LOBBY_PLANTS, LOBBY.floor),
-      balls: at(DOOR_PLANTS, LOBBY.floor, 0.9),
+      balls: [...at(DOOR_PLANTS, LOBBY.floor, 0.9), ...at(LIFT_PLANTS, LOBBY.floor, 0.75)],
       hedges: at(HEDGES, 0),
     };
   }, []);
@@ -391,13 +401,16 @@ function Plants() {
   );
 }
 
-/** The loft's leather lounge (sofa, coffee table and rug) as the lobby's waiting area. */
+/** The loft's leather lounge (sofa, coffee table and rug) as the lobby's two waiting areas. */
 function LobbySofas() {
   const { scene } = useGLTF(LOUNGE_URL, DRACO_PATH);
   const g = useMemo(() => groupsOf(scene), [scene]);
   useEffect(() => () => disposeGroups(g), [g]);
-  const items = useMemo((): Item[] => [{ f: -1, x: LOUNGE.x, z: LOUNGE.z, y: LOBBY.floor, r: Math.PI }], []);
-  const vases = useMemo((): Item[] => [-3.2, 3.2].map((dx) => ({ f: -1, x: LOUNGE.x + dx, z: LOUNGE.z - 1, y: LOBBY.floor })), []);
+  const items = useMemo((): Item[] => LOUNGES.map((l) => ({ f: -1, x: l.x, z: l.z, y: LOBBY.floor, r: Math.PI })), []);
+  const vases = useMemo(
+    (): Item[] => LOUNGES.flatMap((l) => [-3.2, 3.2].map((dx) => ({ f: -1, x: l.x + dx, z: l.z - 1, y: LOBBY.floor }))),
+    [],
+  );
   return (
     <>
       <PlantParts parts={g.SofaSet} items={items} />
