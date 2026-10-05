@@ -1,6 +1,7 @@
 import { ArrowLeft, BadgeCheck, CreditCard, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { BuildingShowcase } from '@/components/building/BuildingShowcase';
 import { FloorMap } from '@/components/home/FloorMap';
 import type { LiveFloor } from '@/components/home/floor-types';
 import { StickyCta } from '@/components/home/StickyCta';
@@ -135,11 +136,35 @@ export default async function HomePage() {
               </li>
             </ul>
           </div>
-          <div className="h-[340px] sm:h-[500px] lg:h-[560px]">
-            {mapLayouts.length > 0 && <FloorMap layouts={mapLayouts} />}
+          <div>
+            <BuildingShowcase className="h-[440px] sm:h-[520px] lg:h-[580px]" />
+            <p className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted">
+              <span>הדמיה: בחרו קומה, היא נפתחת, ונכנסים פנימה.</span>
+              <Link href="/building" className="inline-flex items-center gap-1 font-semibold text-accent-text hover:underline">
+                לסיור במסך מלא <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+            </p>
           </div>
         </div>
       </section>
+
+      {mapLayouts.length > 0 && (
+        <section className="border-b border-border" aria-labelledby="live-title">
+          <div className="mx-auto grid max-w-7xl gap-6 px-4 py-10 sm:gap-8 sm:px-6 sm:py-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-center">
+            <div>
+              <h2 id="live-title" className="text-3xl font-bold tracking-tight">
+                מה פנוי ברגע זה
+              </h2>
+              <p className="mt-3 max-w-lg leading-7 text-muted">
+                מפה חיה של הסניף: כל עמדה וכל חדר מסומנים לפי הזמינות עכשיו, ישירות ממערכת ההזמנות.
+              </p>
+            </div>
+            <div className="h-[340px] sm:h-[460px]">
+              <FloorMap layouts={mapLayouts} />
+            </div>
+          </div>
+        </section>
+      )}
 
       {priceExample && (
         <section className="border-b border-border" aria-labelledby="price-title">
