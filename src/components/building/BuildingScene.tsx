@@ -237,7 +237,8 @@ function CutawayAnimator({ selected, walking }: { selected: number | null; walki
 }
 
 const OVERVIEW_TARGET = new Vector3(14, 60, 0);
-const OVERVIEW_DIR = new Vector3(0.55, 0.16, 0.82).normalize();
+/** From the east, down the avenue's open corridor and above the New York blocks' roofs. */
+const OVERVIEW_DIR = new Vector3(0.82, 0.3, 0.48).normalize();
 
 function goalFor(selected: number | null, aspect: number, pos: Vector3, target: Vector3) {
   if (selected === null) {

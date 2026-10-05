@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLOOR_COUNT, PROGRAM_COPY, programOf } from '@/components/three/building-model';
 import { use3DCapable } from '@/components/three/capability';
 import { useFullscreen, useInView } from '@/components/three/stage-hooks';
-import type { Track } from '@/content/music';
+import type { Mood, Track } from '@/content/music';
 import { AmbientMusic } from './ambient-music';
 import { daylightOf, sunPosition, type SkyMode } from './sky';
 
@@ -21,7 +21,10 @@ const SKY_MODES: { mode: SkyMode; label: string; Icon: typeof Sun }[] = [
   { mode: 'night', label: 'לילה', Icon: Moon },
 ];
 
-function moodFor(mode: SkyMode): 'day' | 'night' {
+type Station = 'chill' | 'phonk';
+
+function moodFor(mode: SkyMode, station: Station): Mood {
+  if (station === 'phonk') return 'phonk';
   if (mode !== 'auto') return mode;
   return daylightOf(sunPosition(new Date()).alt) > 0.5 ? 'day' : 'night';
 }
@@ -44,6 +47,7 @@ export function BuildingShowcase({ className }: { className?: string }) {
   const [skyMode, setSkyMode] = useState<SkyMode>('auto');
   const [music, setMusic] = useState(false);
   const [track, setTrack] = useState<Track | null>(null);
+  const [station, setStation] = useState<Station>('chill');
   const player = useRef<AmbientMusic | null>(null);
   const onReady = useCallback(() => setReady(true), []);
   const onElevator = useCallback((at: boolean) => setAtElevator(at), []);
@@ -56,16 +60,16 @@ export function BuildingShowcase({ className }: { className?: string }) {
       if (!t && !player.current?.playing) setMusic(false);
     });
     if (music) player.current.stop();
-    else void player.current.start(moodFor(skyMode));
+    else void player.current.start(moodFor(skyMode, station));
     setMusic(!music);
-  }, [music, skyMode]);
+  }, [music, skyMode, station]);
 
   useEffect(() => {
     if (!music) return;
-    player.current?.setMood(moodFor(skyMode));
-    const id = window.setInterval(() => player.current?.setMood(moodFor(skyMode)), 60_000);
+    player.current?.setMood(moodFor(skyMode, station));
+    const id = window.setInterval(() => player.current?.setMood(moodFor(skyMode, station)), 60_000);
     return () => window.clearInterval(id);
-  }, [music, skyMode]);
+  }, [music, skyMode, station]);
 
   useEffect(() => () => player.current?.dispose(), []);
 
@@ -176,6 +180,21 @@ export function BuildingShowcase({ className }: { className?: string }) {
           >
             {music ? <Music className="h-4 w-4" aria-hidden="true" /> : <VolumeX className="h-4 w-4" aria-hidden="true" />}
           </button>
+          {music && (
+            <div role="group" aria-label="סגנון מוזיקה" className={clsx(chip, 'flex items-center gap-0.5 p-0.5 text-2xs')}>
+              {(['chill', 'phonk'] as const).map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setStation(s)}
+                  aria-pressed={station === s}
+                  className={clsx('rounded-full px-2 py-1 transition-colors', station === s ? 'bg-white text-zinc-950' : 'text-white/80 hover:text-white')}
+                >
+                  {s === 'chill' ? 'רגוע' : 'פונק'}
+                </button>
+              ))}
+            </div>
+          )}
           {music && (
             <button
               type="button"

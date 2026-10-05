@@ -17,11 +17,33 @@ const LIFT = 0.25;
 /** Tallest roof in the model, water towers included. */
 export const NYC_TOP = 113;
 
-/** One block behind the tower (east of the side street), one across the avenue to the far left, turned around. */
-const BLOCKS = [
+/**
+ * Copies of the block around the tower, kept clear of the plaza, the avenue, the side street and
+ * the neighbouring building. Blocks seen up close keep every detail; `lite` ones, seen only from
+ * afar, drop the street furniture, fire escapes and rooftop clutter to stay light on phones.
+ */
+const BLOCKS: readonly { x: number; z: number; rot: number; lite?: boolean }[] = [
   { x: 70, z: -150, rot: 0 },
   { x: -200, z: 175, rot: Math.PI },
-] as const;
+  { x: 80, z: 170, rot: 0 },
+  { x: -200, z: -72, rot: Math.PI },
+  { x: 340, z: 170, rot: Math.PI, lite: true },
+  { x: 330, z: -150, rot: Math.PI, lite: true },
+  { x: 70, z: -352, rot: Math.PI, lite: true },
+  { x: -200, z: -272, rot: 0, lite: true },
+];
+const LITE_DROP = /Street_Assets|firescape|trash|WetFloor|Decal|CityGenAC|Vent|solar|rooftop_tank|Foliage|Bark/i;
+
+function liteCopy(root: Object3D): Object3D {
+  const copy = root.clone(true);
+  const drop: Object3D[] = [];
+  copy.traverse((obj) => {
+    const mesh = obj as Mesh;
+    if (mesh.isMesh && LITE_DROP.test((mesh.material as Material).name)) drop.push(mesh);
+  });
+  for (const mesh of drop) mesh.removeFromParent();
+  return copy;
+}
 
 export const NYC_RECTS = BLOCKS.map((b) => ({ x0: b.x - HALF.x, x1: b.x + HALF.x, z0: b.z - HALF.z, z1: b.z + HALF.z }));
 
@@ -115,7 +137,7 @@ export function NycBlocks() {
   const { scene } = useGLTF(NYC_URL, DRACO_PATH);
   const { blocks, materials } = useMemo(() => {
     const { root, materials } = prepareNyc(scene);
-    return { blocks: BLOCKS.map((_, i) => (i === 0 ? root : root.clone(true))), materials };
+    return { blocks: BLOCKS.map((b, i) => (i === 0 ? root : b.lite ? liteCopy(root) : root.clone(true))), materials };
   }, [scene]);
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);
   return (

@@ -1,5 +1,5 @@
 /** Background tracks for the building tour, self-hosted in public/audio. All are CC0 (public domain). */
-export type Mood = 'day' | 'night';
+export type Mood = 'day' | 'night' | 'phonk';
 export type Track = { title: string; src: string; source: string };
 
 export const MUSIC_ARTIST = { name: 'HoliznaCC0', url: 'https://freemusicarchive.org/music/holiznacc0/' };
@@ -7,6 +7,7 @@ export const MUSIC_LICENSE = { license: 'CC0 1.0', licenseUrl: 'https://creative
 
 const fma = (album: string, handle: string) => `https://freemusicarchive.org/music/holiznacc0/${album}/${handle}/`;
 const LOFI = 'public-domain-lofi';
+const PHONK = 'phonk-aura-farming';
 
 export const PLAYLISTS: Record<Mood, Track[]> = {
   day: [
@@ -29,7 +30,16 @@ export const PLAYLISTS: Record<Mood, Track[]> = {
     { title: 'Into The Mist', src: '/audio/night-into-the-mist.mp3', source: fma(LOFI, 'into-the-mist-lofi-calm-relaxed') },
     { title: 'Infinite Echoes', src: '/audio/night-infinite-echoes.mp3', source: fma(LOFI, 'infinite-echoes-lofi-dreamy-soft') },
   ],
+  phonk: [
+    { title: 'ONLY HUMAN', src: '/audio/phonk-only-human.mp3', source: fma(PHONK, 'only-human') },
+    { title: 'Re Adusjtment', src: '/audio/phonk-re-adusjtment.mp3', source: fma(PHONK, 're-adusjtment') },
+    { title: 'Pantheon', src: '/audio/phonk-pantheon.mp3', source: fma(PHONK, 'pantheon') },
+    { title: 'Phonk Remix', src: '/audio/phonk-phonk-remix.mp3', source: fma(PHONK, 'phonk-remix') },
+    { title: 'Phonk ish', src: '/audio/phonk-phonk-ish.mp3', source: fma(PHONK, 'phonk-ish') },
+  ],
 };
+
+export const MOOD_LABEL: Record<Mood, string> = { day: 'ביום', night: 'בלילה', phonk: 'פונק' };
 
 /** Fisher–Yates order of 0..n-1 that never starts with `avoid`, so a reshuffle does not repeat the last song. */
 export function shuffledOrder(n: number, random: () => number, avoid = -1): number[] {

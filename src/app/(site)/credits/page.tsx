@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { CREDITS } from '@/content/credits';
-import { MUSIC_ARTIST, MUSIC_LICENSE, PLAYLISTS } from '@/content/music';
+import { MOOD_LABEL, MUSIC_ARTIST, MUSIC_LICENSE, PLAYLISTS } from '@/content/music';
 
 export const metadata: Metadata = {
   title: 'קרדיטים',
@@ -51,9 +51,9 @@ export default function CreditsPage() {
         </a>
         . הרישיון לא מחייב ייחוס, אבל מגיע לו. השירים דחוסים ועם עוצמה אחידה.
       </p>
-      {(['day', 'night'] as const).map((mood) => (
+      {(['day', 'night', 'phonk'] as const).map((mood) => (
         <div key={mood} className="mt-5">
-          <h3 className="text-sm font-semibold">{mood === 'day' ? 'ביום' : 'בלילה'}</h3>
+          <h3 className="text-sm font-semibold">{MOOD_LABEL[mood]}</h3>
           <ul className="mt-2 flex flex-wrap gap-2" dir="ltr">
             {PLAYLISTS[mood].map((t) => (
               <li key={t.src}>
