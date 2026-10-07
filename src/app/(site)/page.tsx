@@ -8,6 +8,7 @@ import { SearchBar } from '@/components/search/SearchBar';
 import { ButtonLink } from '@/components/ui/Button';
 import { RenderBadge } from '@/components/ui/RenderBadge';
 import { getCatalog } from '@/lib/content/catalog';
+import { getSalesInfo } from '@/lib/content/offers';
 import { calculatePrice, formatIls } from '@/lib/domain/pricing';
 import { BOOKING_WINDOW_DAYS, maxBookableDate, nextOpenDate, nowInIsrael } from '@/lib/domain/time';
 import { SPACE_TYPES, SPACE_TYPE_LABELS, type SpaceType } from '@/lib/domain/types';
@@ -20,7 +21,7 @@ const TYPE_COPY: Record<SpaceType, { pitch: string; unit: string }> = {
 };
 
 export default async function HomePage() {
-  const catalog = await getCatalog();
+  const [catalog, sales] = await Promise.all([getCatalog(), getSalesInfo()]);
   const { cities, branches, spaces, settings } = catalog;
   const today = nowInIsrael().date;
   const cityNames = cities.map((c) => c.name);
@@ -124,7 +125,7 @@ export default async function HomePage() {
             </ul>
           </div>
           <div>
-            <BuildingShowcase className="h-[440px] sm:h-[520px] lg:h-[580px]" />
+            <BuildingShowcase sales={sales} className="h-[440px] sm:h-[520px] lg:h-[580px]" />
             <p className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-muted">
               <span>הדמיה: בחרו קומה, היא נפתחת, ונכנסים פנימה.</span>
               <Link href="/building" className="inline-flex items-center gap-1 font-semibold text-accent-text hover:underline">

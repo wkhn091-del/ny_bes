@@ -31,6 +31,25 @@ function hasHardwareWebGL(): boolean {
   return webglSupport;
 }
 
+function subscribeNone() {
+  return () => {};
+}
+
+/**
+ * Phones, small tablets and low-memory devices: they get lighter scenery, a lower render
+ * resolution, and load street-level detail only when the visitor goes down to the street.
+ */
+export function useLiteDevice(): boolean {
+  return useSyncExternalStore(
+    subscribeNone,
+    () => {
+      const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8;
+      return window.matchMedia('(pointer: coarse)').matches || window.innerWidth < 768 || memory <= 4;
+    },
+    () => true,
+  );
+}
+
 /** True when the device should get real-time 3D: motion allowed, hardware WebGL, at least 4 cores. */
 export function use3DCapable(): boolean {
   return useSyncExternalStore(

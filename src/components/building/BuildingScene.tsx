@@ -2,7 +2,7 @@
 
 import { Environment, Html, Lightformer, OrbitControls, useGLTF } from '@react-three/drei';
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AdditiveBlending, CanvasTexture, Color, type Group, MeshBasicMaterial, MeshStandardMaterial, type PerspectiveCamera, type PointLight, SRGBColorSpace, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { BUILDING_URL, CLEAR_HEIGHT, FLOOR_COUNT, PLATE, PROGRAM_COPY, ROOF_Y, floorY, prepareBuilding, programOf } from '@/components/three/building-model';
@@ -13,11 +13,12 @@ import { City, GOBLIN_URL, NEIGHBOUR_AT, SIGNS_URL, TRAFFIC_A_URL, fadeByDay } f
 import { ELEVATOR_URL, Entrance, FloorLift, FloorLiftLight, FOUNTAIN_URL, HERO_CAR_URL, PLANTS_URL, RECEPTION_URL, TREE_URL, WAITING_URL } from './entrance';
 import { EXEC_URL, Furnishing, Interior, LOUNGE_URL, MEET_URL } from './interior';
 import { buildLayout, type Layout } from './layout';
-import { NYC_TOWER_URL, NYC_URL, NycBlocks, NycTower, liftOverNyc } from './nyc';
+import { NycBlocks, NycTower, liftOverNyc } from './nyc';
 import { RES_LOBBY_URL, RES_LOFT_URL, Residence, ResidenceEntrance, ResidenceLights, homeZone } from './residence';
 import { CLIP, CLIP_PLANES, CUT, WALK } from './shared';
 import { SKY, applyDayTints, dayTint, type SkyMode } from './sky';
 import { WalkRig } from './walk';
+import type { SpaceOffer } from './offers';
 
 const CROWN = new Color('#a78bfa').multiplyScalar(2.2);
 
@@ -363,6 +364,16 @@ function Building({ selected, layout }: { selected: number | null; layout: Layou
   );
 }
 
+/** Street level: cars, signs, the entrance and the lobby. */
+const STREET_MODELS = [TRAFFIC_A_URL, GOBLIN_URL, HERO_CAR_URL, SIGNS_URL, TREE_URL, FOUNTAIN_URL, PLANTS_URL, RECEPTION_URL, WAITING_URL, ELEVATOR_URL, LOUNGE_URL];
+/** Furniture for an open floor. */
+const FLOOR_MODELS = [KIT_URL, EXEC_URL, MEET_URL];
+
+/** Fetches and decodes models ahead of need, once the tower itself is on screen. */
+function preload(...lists: string[][]) {
+  for (const url of lists.flat()) useGLTF.preload(url, DRACO_PATH);
+}
+
 function Ready({ onReady }: { onReady: () => void }) {
   useEffect(() => onReady(), [onReady]);
   return null;
@@ -379,6 +390,8 @@ export default function BuildingScene({
   rideTo,
   home,
   homeRideTo,
+  lite,
+  offers,
 }: {
   active: boolean;
   selected: number | null;
@@ -393,16 +406,26 @@ export default function BuildingScene({
 ull elsewhere. */
   home: number | null;
   homeRideTo: number | null;
+  /** Phones and low-memory devices: lighter scenery, and street detail only once walking. */
+  lite: boolean;
+  /** Live "from" prices for the sales screens in the lobbies. */
+  offers: SpaceOffer[];
 }) {
   const layout = useMemo(() => buildLayout(), []);
+  const [shown, setShown] = useState(false);
+  const ready = useCallback(() => {
+    setShown(true);
+    onReady();
+  }, [onReady]);
   useEffect(() => {
-    if (!walking) return;
-    useGLTF.preload(RES_LOBBY_URL, DRACO_PATH);
-    useGLTF.preload(RES_LOFT_URL, DRACO_PATH);
-  }, [walking]);
+    if (!shown) return;
+    if (!lite) preload(STREET_MODELS, FLOOR_MODELS);
+    if (walking) preload(STREET_MODELS, [RES_LOBBY_URL, RES_LOFT_URL]);
+  }, [shown, lite, walking]);
+  const street = !lite || walking;
   return (
     <Canvas
-      dpr={[1, 1.6]}
+      dpr={lite ? [1, 1.25] : [1, 1.6]}
       frameloop={active ? 'always' : 'never'}
       camera={{ position: [130, 70, 190], fov: ORBIT_FOV, near: ORBIT_NEAR, far: 2600 }}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
@@ -421,26 +444,28 @@ ull elsewhere. */
         <Lightformer form="ring" intensity={0.5} color="#ffffff" position={[0, 10, 0]} scale={4} rotation-x={Math.PI / 2} />
       </Environment>
       <Suspense fallback={null}>
-        <City />
+        <City street={street} />
       </Suspense>
       <Suspense fallback={null}>
-        <NycBlocks />
+        <NycBlocks lite={lite} />
       </Suspense>
       <Suspense fallback={null}>
         <Building selected={selected} layout={layout} />
         <Suspense fallback={null}>
           <NycTower at={NEIGHBOUR_AT} />
         </Suspense>
-        <Suspense fallback={null}>
-          <Entrance />
-        </Suspense>
+        {street && (
+          <Suspense fallback={null}>
+            <Entrance offers={offers} />
+          </Suspense>
+        )}
         <Crown />
         {!walking && <FloorHits selected={selected} onSelect={onSelect} />}
         <ResidenceEntrance />
         {walking && <WalkRig zone={home !== null ? homeZone(home) : (selected ?? 'street')} layout={layout} onElevator={onElevator} />}
         {walking && home !== null && (
           <Suspense fallback={null}>
-            <Residence level={home} rideTo={homeRideTo} />
+            <Residence level={home} rideTo={homeRideTo} offers={offers} />
           </Suspense>
         )}
         <ResidenceLights level={walking ? home : null} />
@@ -448,7 +473,7 @@ ull elsewhere. */
         <FloorLiftLight floor={walking ? selected : null} />
         <SelectedFloorLights selected={selected} />
         <CutawayAnimator selected={selected} walking={walking} />
-        <Ready onReady={onReady} />
+        <Ready onReady={ready} />
       </Suspense>
       <CameraRig selected={selected} walking={walking} />
     </Canvas>
@@ -456,19 +481,3 @@ ull elsewhere. */
 }
 
 useGLTF.preload(BUILDING_URL, DRACO_PATH);
-useGLTF.preload(KIT_URL, DRACO_PATH);
-useGLTF.preload(TRAFFIC_A_URL, DRACO_PATH);
-useGLTF.preload(HERO_CAR_URL, DRACO_PATH);
-useGLTF.preload(RECEPTION_URL, DRACO_PATH);
-useGLTF.preload(PLANTS_URL, DRACO_PATH);
-useGLTF.preload(FOUNTAIN_URL, DRACO_PATH);
-useGLTF.preload(ELEVATOR_URL, DRACO_PATH);
-useGLTF.preload(TREE_URL, DRACO_PATH);
-useGLTF.preload(WAITING_URL, DRACO_PATH);
-useGLTF.preload(NYC_URL, DRACO_PATH);
-useGLTF.preload(NYC_TOWER_URL, DRACO_PATH);
-useGLTF.preload(EXEC_URL, DRACO_PATH);
-useGLTF.preload(LOUNGE_URL, DRACO_PATH);
-useGLTF.preload(MEET_URL, DRACO_PATH);
-useGLTF.preload(GOBLIN_URL, DRACO_PATH);
-useGLTF.preload(SIGNS_URL, DRACO_PATH);

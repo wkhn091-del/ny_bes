@@ -7,11 +7,13 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FLOOR_COUNT, PROGRAM_COPY, programOf } from '@/components/three/building-model';
-import { use3DCapable } from '@/components/three/capability';
+import { use3DCapable, useLiteDevice } from '@/components/three/capability';
 import { useFullscreen, useInView } from '@/components/three/stage-hooks';
 import type { Mood, Track } from '@/content/music';
 import { RESIDENCE_NAME, RESIDENTS } from '@/content/residents';
 import { AmbientMusic } from './ambient-music';
+import type { SalesInfo } from './offers';
+import { SalesPanel } from './SalesPanel';
 import { WALK_SIGNAL } from './walk-signal';
 import { daylightOf, sunPosition, type SkyMode } from './sky';
 
@@ -48,8 +50,9 @@ const destination = (r: Ride) => (r.building === 'home' ? (r.to === 0 ? 'לוב�
 const DOORS_MS = 1200;
 const chip = 'rounded-full bg-black/60 text-white backdrop-blur';
 
-export function BuildingShowcase({ className }: { className?: string }) {
+export function BuildingShowcase({ className, sales }: { className?: string; sales?: SalesInfo }) {
   const capable = use3DCapable();
+  const lite = useLiteDevice();
   const [stage, setStage] = useState<HTMLDivElement | null>(null);
   const near = useInView(stage, '300px');
   const [mounted, setMounted] = useState(false);
@@ -225,7 +228,7 @@ export function BuildingShowcase({ className }: { className?: string }) {
   };
 
   return (
-    <div ref={setStage} className={clsx('relative overflow-hidden rounded-3xl border border-border bg-[#060912] [&:fullscreen]:rounded-none', className)}>
+    <div ref={setStage} className={clsx('relative select-none overflow-hidden rounded-3xl border border-border bg-[#060912] [&:fullscreen]:rounded-none', className)}>
       <Image
         src={BUILDING_POSTER}
         alt="הדמיה של מגדל משרדים בלילה: קומות מוארות, כתר סגול בגג, ועיר מסביב"
@@ -246,6 +249,8 @@ export function BuildingShowcase({ className }: { className?: string }) {
             rideTo={ride?.building === 'office' && ride.to !== LOBBY_LEVEL ? ride.to : null}
             home={home}
             homeRideTo={ride?.building === 'home' ? ride.to : null}
+            lite={lite}
+            offers={sales?.offers ?? []}
           />
         </div>
       )}
@@ -325,6 +330,7 @@ export function BuildingShowcase({ className }: { className?: string }) {
         </section>
       )}
       <span className={clsx(chip, 'pointer-events-none absolute left-3 top-3 px-2.5 py-1 text-xs font-medium')}>הדמיה</span>
+      {walking && sales && !ride && !atElevator && <SalesPanel sales={sales} program={home === null ? program : null} residence={home !== null} />}
       {capable && ready && supported && (
         <button type="button" onClick={toggle} className={clsx(chip, 'absolute right-3 top-3 p-2 hover:bg-black/75')} aria-label={isFull ? 'יציאה ממסך מלא' : 'מסך מלא'}>
           {isFull ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}

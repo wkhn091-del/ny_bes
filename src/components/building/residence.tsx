@@ -3,7 +3,7 @@
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
-import { CanvasTexture, DoubleSide, type Object3D, SRGBColorSpace } from 'three';
+import { CanvasTexture, DoubleSide, type Group, type MeshStandardMaterial, type Object3D, SRGBColorSpace } from 'three';
 import { DRACO_PATH } from '@/components/three/desk-model';
 import { clamp } from '@/components/three/first-person';
 import { RESIDENCE_NAME, RESIDENTS } from '@/content/residents';
@@ -12,6 +12,8 @@ import type { Rect } from './layout';
 import { LOUNGE_URL, disposeGroups, groupsOf } from './realistic';
 import { type Item, WALK } from './shared';
 import { WALK_SIGNAL } from './walk-signal';
+import type { SpaceOffer } from './offers';
+import { nearHomeTexture } from './sales-board';
 
 /**
  * The neighbouring apartment tower (the NYC tower model at NEIGHBOUR_AT, x 72–96, z −2.5–30.5):
@@ -335,7 +337,27 @@ function HallShell() {
   );
 }
 
-function Foyer() {
+/** A framed poster on the foyer wall: a SpaceHub desk near home, with the live hourly price. */
+function NearHomePoster({ offers }: { offers: SpaceOffer[] }) {
+  const offer = offers.find((o) => o.type === 'hotDesk') ?? offers[0];
+  const tex = useMemo(() => nearHomeTexture(offer), [offer]);
+  useEffect(() => () => tex.dispose(), [tex]);
+  if (!offer) return null;
+  return (
+    <group position={[FOYER.x1 - 0.11, HALL_FLOOR + 1.9, 15.8]} rotation-y={-Math.PI / 2}>
+      <mesh position={[0, 0, -0.01]}>
+        <boxGeometry args={[2.1, 1.36, 0.03]} />
+        <meshStandardMaterial color="#b8975c" metalness={0.8} roughness={0.3} />
+      </mesh>
+      <mesh position={[0, 0, 0.01]}>
+        <planeGeometry args={[1.98, 1.23]} />
+        <meshBasicMaterial map={tex} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
+function Foyer({ offers }: { offers: SpaceOffer[] }) {
   const lounge = useGLTF(LOUNGE_URL, DRACO_PATH);
   const desk = useGLTF(RECEPTION_URL, DRACO_PATH);
   const g = useMemo(() => groupsOf(lounge.scene), [lounge.scene]);
@@ -405,18 +427,19 @@ function Foyer() {
       <primitive object={deskModel} position={[DESK_AT.x, HALL_FLOOR, DESK_AT.z]} rotation-y={-Math.PI / 2} scale={0.6} />
       <Figure x={DESK_AT.x + 1.1} z={DESK_AT.z} y={HALL_FLOOR} r={-Math.PI / 2} k={5} />
       <Mailboxes x={FOYER.x0 + 0.12} z={20.4} />
+      <NearHomePoster offers={offers} />
     </group>
   );
 }
 
-function ResidenceLobby() {
+function ResidenceLobby({ offers }: { offers: SpaceOffer[] }) {
   const { scene } = useGLTF(RES_LOBBY_URL, DRACO_PATH);
   const hall = useMemo(() => scene.clone(true), [scene]);
   return (
     <>
       <group position={[HALL.x, 0, HALL.z]}>
         <primitive object={hall} />
-        <Foyer />
+        <Foyer offers={offers} />
         <Figure x={-9.4} z={2} y={WEST_WALK} r={Math.PI / 2} k={1} />
         <Figure x={0.4} z={6.5} y={HALL_FLOOR} r={Math.PI} k={2} />
       </group>
@@ -492,6 +515,9 @@ function Apartment({ level }: { level: number }) {
 }
 
 /** The residence's street entrance: a lit canopy and the building's name over the glass doors. */
+const PORTAL = '#cbbda5';
+const BRONZE = '#6b5232';
+
 export function ResidenceEntrance() {
   const sign = useLabel(1024, 160, (ctx) => {
     ctx.fillStyle = '#15120e';
@@ -501,14 +527,123 @@ export function ResidenceEntrance() {
     ctx.font = '600 84px Georgia, serif';
     ctx.fillText(RESIDENCE_NAME.toUpperCase(), 512, 110);
   });
+  const number = useLabel(256, 256, (ctx) => {
+    ctx.fillStyle = '#15120e';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = '#e2c387';
+    ctx.textAlign = 'center';
+    ctx.font = '600 150px Georgia, serif';
+    ctx.fillText('88', 128, 180);
+  });
+  const leaves = useRef<(Group | null)[]>([]);
+  const glow = useRef<MeshStandardMaterial>(null);
+  const open = useRef(0);
   const x = RESIDENCE_DOOR.x;
   const face = HALL.z + FOYER.z1 + 0.58;
+  useFrame(({ camera }, delta) => {
+    const near = Math.hypot(camera.position.x - x, camera.position.z - face) < 9 && camera.position.y < 6;
+    open.current += ((near ? 1 : 0) - open.current) * Math.min(1, delta * 2.5);
+    leaves.current.forEach((g, i) => {
+      if (g) g.rotation.y = (i === 0 ? -1 : 1) * open.current * 1.35;
+    });
+    if (glow.current) {
+      glow.current.opacity = 1 - open.current;
+      glow.current.visible = open.current < 0.97;
+    }
+  });
   return (
     <group position={[x, 0, face]}>
-      <mesh position={[0, 1.7, 0.01]}>
-        <planeGeometry args={[3.4, 3.2]} />
-        <meshStandardMaterial color="#1c2a36" metalness={0.6} roughness={0.15} emissive="#ffcf8a" emissiveIntensity={0.25} />
+      <mesh position={[0, 2, 0.005]}>
+        <planeGeometry args={[3.2, 4]} />
+        <meshStandardMaterial ref={glow} color="#3a2e22" emissive="#ffcf8a" emissiveIntensity={0.55} roughness={0.8} transparent />
       </mesh>
+      {[-2.05, 2.05].map((px) => (
+        <mesh key={px} position={[px, 2.15, 0.2]}>
+          <boxGeometry args={[0.9, 4.3, 0.4]} />
+          <meshStandardMaterial color={PORTAL} roughness={0.55} />
+        </mesh>
+      ))}
+      <mesh position={[0, 4.15, 0.2]}>
+        <boxGeometry args={[5, 0.5, 0.4]} />
+        <meshStandardMaterial color={PORTAL} roughness={0.55} />
+      </mesh>
+      <mesh position={[0, 3.55, 0.06]}>
+        <boxGeometry args={[3.2, 0.06, 0.12]} />
+        <meshStandardMaterial color={BRONZE} metalness={0.85} roughness={0.3} />
+      </mesh>
+      <mesh position={[0, 3.75, 0.05]}>
+        <planeGeometry args={[3.1, 0.34]} />
+        <meshStandardMaterial color="#2b3440" metalness={0.5} roughness={0.12} emissive="#ffd59a" emissiveIntensity={0.35} />
+      </mesh>
+      {[-1, 1].map((side, i) => (
+        <group
+          key={side}
+          ref={(g) => {
+            leaves.current[i] = g;
+          }}
+          position={[side * 1.58, 0.1, 0.08]}
+        >
+          <group position={[-side * 0.78, 1.72, 0]}>
+            <mesh>
+              <boxGeometry args={[1.5, 3.36, 0.03]} />
+              <meshStandardMaterial color="#26303b" metalness={0.5} roughness={0.08} transparent opacity={0.55} emissive="#ffd59a" emissiveIntensity={0.3} />
+            </mesh>
+            {[
+              [0, 1.66, 1.56, 0.08],
+              [0, -1.66, 1.56, 0.12],
+              [side * 0.74, 0, 0.08, 3.4],
+              [-side * 0.74, 0, 0.08, 3.4],
+            ].map(([fx, fy, w, h], k) => (
+              <mesh key={k} position={[fx!, fy!, 0]}>
+                <boxGeometry args={[w!, h!, 0.07]} />
+                <meshStandardMaterial color={BRONZE} metalness={0.85} roughness={0.3} />
+              </mesh>
+            ))}
+            <mesh position={[-side * 0.6, -0.1, 0.09]}>
+              <cylinderGeometry args={[0.025, 0.025, 1.3, 10]} />
+              <meshStandardMaterial color="#d8b878" metalness={0.9} roughness={0.2} />
+            </mesh>
+          </group>
+        </group>
+      ))}
+      <mesh position={[0, 0.1, 0.7]}>
+        <boxGeometry args={[5, 0.2, 1.3]} />
+        <meshStandardMaterial color={PORTAL} roughness={0.7} />
+      </mesh>
+      <mesh position={[0, 0.205, 0.75]} rotation-x={-Math.PI / 2}>
+        <planeGeometry args={[2.2, 0.9]} />
+        <meshStandardMaterial color="#2a211a" roughness={1} />
+      </mesh>
+      <mesh position={[2.05, 2.75, 0.41]}>
+        <planeGeometry args={[0.42, 0.42]} />
+        <meshBasicMaterial map={number} toneMapped={false} />
+      </mesh>
+      <mesh position={[2.05, 1.45, 0.42]}>
+        <boxGeometry args={[0.24, 0.42, 0.04]} />
+        <meshStandardMaterial color="#1b1d21" metalness={0.7} roughness={0.3} />
+      </mesh>
+      <mesh position={[2.05, 1.52, 0.445]}>
+        <planeGeometry args={[0.16, 0.12]} />
+        <meshBasicMaterial color="#9fd3ff" toneMapped={false} />
+      </mesh>
+      {[-2.05, 2.05].map((px) => (
+        <mesh key={px} position={[px, 3.3, 0.45]}>
+          <boxGeometry args={[0.16, 0.42, 0.1]} />
+          <meshBasicMaterial color="#ffe2b0" toneMapped={false} />
+        </mesh>
+      ))}
+      {[-3.4, 3.4].map((px) => (
+        <group key={px} position={[px, 0, 0.9]}>
+          <mesh position={[0, 0.4, 0]}>
+            <boxGeometry args={[0.9, 0.8, 0.9]} />
+            <meshStandardMaterial color="#2a2621" roughness={0.6} />
+          </mesh>
+          <mesh position={[0, 1.25, 0]}>
+            <sphereGeometry args={[0.55, 16, 12]} />
+            <meshStandardMaterial color="#3d5a32" roughness={0.9} />
+          </mesh>
+        </group>
+      ))}
       <mesh position={[0, 3.85, 1.6]}>
         <boxGeometry args={[7, 0.3, 3.2]} />
         <meshStandardMaterial color="#1a1814" metalness={0.6} roughness={0.35} />
@@ -532,9 +667,9 @@ export function ResidenceEntrance() {
 }
 
 /** Whichever part of the residence you are walking: the lobby (0) or apartment 1–8, plus a ride's destination. */
-export function Residence({ level, rideTo }: { level: number; rideTo: number | null }) {
+export function Residence({ level, rideTo, offers }: { level: number; rideTo: number | null; offers: SpaceOffer[] }) {
   const shown = [...new Set([level, rideTo ?? level])];
-  return <>{shown.map((l) => (l === 0 ? <ResidenceLobby key={l} /> : <Apartment key={l} level={l} />))}</>;
+  return <>{shown.map((l) => (l === 0 ? <ResidenceLobby key={l} offers={offers} /> : <Apartment key={l} level={l} />))}</>;
 }
 
 /**

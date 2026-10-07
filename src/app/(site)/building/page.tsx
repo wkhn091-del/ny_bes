@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { BuildingShowcase } from '@/components/building/BuildingShowcase';
 import { ButtonLink } from '@/components/ui/Button';
+import { getSalesInfo } from '@/lib/content/offers';
 
 export const metadata: Metadata = {
   title: 'סיור בבניין בתלת־ממד',
@@ -9,7 +10,8 @@ export const metadata: Metadata = {
   alternates: { canonical: '/building' },
 };
 
-export default function BuildingPage() {
+export default async function BuildingPage() {
+  const sales = await getSalesInfo();
   return (
     <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10 lg:py-14" aria-labelledby="building-title">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3 sm:mb-6 sm:gap-4">
@@ -24,7 +26,7 @@ export default function BuildingPage() {
         </div>
         <ButtonLink href="/spaces">מה פנוי עכשיו?</ButtonLink>
       </div>
-      <BuildingShowcase className="h-[70svh] min-h-[420px] sm:h-[min(82vh,800px)] sm:min-h-[560px]" />
+      <BuildingShowcase sales={sales} className="h-[70svh] min-h-[420px] sm:h-[min(82vh,800px)] sm:min-h-[560px]" />
       <p className="mt-3 text-xs text-muted">
         ההדמיה ממחישה את סוגי החללים. הסניפים שלנו נמצאים בבניינים שונים, והפרטים של כל סניף מופיעים בעמוד שלו. חלק
         מהמודלים (רחובות ניו יורק ורהיטים) הם של יוצרים אחרים, ברישיון CC BY ·{' '}

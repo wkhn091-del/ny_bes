@@ -279,7 +279,7 @@ export function Streets({ strips }: { strips: Strip[] }) {
     const paving = pavingTexture();
     const mats = {
       ground: new MeshStandardMaterial({ roughness: 0.95, map: paving }),
-      plaza: new MeshStandardMaterial({ roughness: 0.6, metalness: 0.05, map: paving }),
+      plaza: new MeshStandardMaterial({ roughness: 0.75, metalness: 0.02, envMapIntensity: 0.45, map: paving }),
       road: new MeshStandardMaterial({ roughness: 0.82, metalness: 0.05, map: asphalt }),
       walk: new MeshStandardMaterial({ roughness: 0.85, map: paving }),
     };
@@ -875,7 +875,6 @@ export function Signals() {
 }
 
 const SIGN_HEIGHT = 3.1;
-
 /** Posted signs along both streets, each turned to face the traffic it is meant for. */
 export function RoadSigns() {
   const { scene } = useGLTF(SIGNS_URL, DRACO_PATH);
@@ -890,8 +889,7 @@ export function RoadSigns() {
       }
       const k = SIGN_HEIGHT / Math.max(0.01, box.max.y - box.min.y);
       for (const p of parts ?? []) p.geometry.scale(k, k, k);
-    }
-    return g;
+    }    return g;
   }, [scene]);
   useEffect(() => () => disposeGroups(groups), [groups]);
   const spots = useMemo(() => {

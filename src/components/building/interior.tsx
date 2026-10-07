@@ -33,7 +33,7 @@ import {
   type Layout,
 } from './layout';
 import { RealisticFurniture, SpacePhotos } from './realistic';
-import { nameScreenTexture } from './screens';
+import { codeScreenTexture } from './screens';
 
 export { EXEC_URL, LOUNGE_URL, MEET_URL } from './realistic';
 import { CLIP_PLANES, ONE, composeItem, seededRandom, type Item } from './shared';
@@ -97,9 +97,9 @@ const behindScreen = (by: number) => (it: Item): Item => ({ ...it, z: it.z - (it
 const BEHIND_FRAME = behindScreen(0.02);
 const BEHIND_STAND = behindScreen(0.05);
 
-/** Every monitor shows one of the names, with a frame and a stand. */
+/** Every monitor shows code being written by one of the names, with a frame and a stand. */
 function Monitors({ items }: { items: Item[] }) {
-  const textures = useMemo(() => SCREEN_NAMES.map((n) => nameScreenTexture(n)), []);
+  const textures = useMemo(() => SCREEN_NAMES.map((n, k) => codeScreenTexture(k, n.split(' ')[0]!.toLowerCase())), []);
   useEffect(() => () => textures.forEach((t) => t.dispose()), [textures]);
   const byName = useMemo(() => SCREEN_NAMES.map((_, k) => items.filter((it) => it.k === k)), [items]);
   return (

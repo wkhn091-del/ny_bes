@@ -1,7 +1,7 @@
 'use client';
 
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   BackSide,
   type BufferGeometry,
@@ -477,7 +477,8 @@ function gridBlocked(x: number, z: number): boolean {
   return Math.abs(x - NEIGHBOUR_AT[0]) < 34 && Math.abs(z - NEIGHBOUR_AT[2]) < 30;
 }
 
-export function City() {
+/** `street`: whether to load the street-level models (traffic and road signs); phones wait until the visitor walks. */
+export function City({ street = true }: { street?: boolean }) {
   const strips = useMemo(() => gridStrips(gridBlocked), []);
   return (
     <group>
@@ -488,8 +489,12 @@ export function City() {
       <RiverAndBridge />
       <FarSkyline />
       <Signals />
-      <Traffic />
-      <RoadSigns />
+      {street && (
+        <Suspense fallback={null}>
+          <Traffic />
+          <RoadSigns />
+        </Suspense>
+      )}
     </group>
   );
 }

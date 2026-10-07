@@ -10,6 +10,8 @@ import type { KitPart } from '@/components/three/kit-model';
 import { AVENUE_HALF, AVENUE_Z, CROSSWALK, SIDE_X } from './city';
 import { ModelInstances } from './interior';
 import { rectAt, type Rect } from './layout';
+import type { SpaceOffer } from './offers';
+import { totemTexture } from './sales-board';
 import { LOUNGE_URL, disposeGroups, groupsOf } from './realistic';
 import { SIGN_SPOTS } from './roads';
 import { type Item, WALK } from './shared';
@@ -107,6 +109,11 @@ const FLOOR_CAB = (() => {
 const LOUNGES = [
   { x: 20, z: 9, w: 6.4, d: 4 },
   { x: -20, z: 9, w: 6.4, d: 4 },
+];
+/** Digital sales totems just inside the doors, facing whoever walks in. */
+const TOTEMS: [number, number][] = [
+  [-7.6, 11.6],
+  [7.6, 11.6],
 ];
 const LOBBY_PLANTS: [number, number][] = [
   [-11, 9],
@@ -208,8 +215,10 @@ export function streetObstacles(): Rect[] {
     rects.push({ x0, x1, z0: ELEVATOR.z - 0.1, z1: CAB_FRONT_Z });
   for (const [x, z] of TREES) rects.push(rectAt(x, z, 1.6, 1.6));
   for (const [x, z] of AVENUE_TREES) if (Math.abs(x) < 40) rects.push(rectAt(x, z, 0.6, 0.6));
-  for (const [x, z] of [...LOBBY_PLANTS, ...DOOR_PLANTS, ...LIFT_PLANTS]) rects.push(rectAt(x, z, 0.8, 0.8));
+  for (const [x, z] of LOBBY_PLANTS) rects.push(rectAt(x, z, 1.2, 1.2));
+  for (const [x, z] of [...DOOR_PLANTS, ...LIFT_PLANTS]) rects.push(rectAt(x, z, 1.8, 1.8));
   for (const [x, z] of HEDGES) rects.push(rectAt(x, z, 0.9, 2.6));
+  for (const [x, z] of TOTEMS) rects.push(rectAt(x, z, 1.5, 0.6));
   for (const [x, z] of [...SIGNAL_POLES, ...STREET_LAMPS]) rects.push(rectAt(x, z, 0.3, 0.3));
   for (const s of SIGN_SPOTS) rects.push(rectAt(s.x, s.z, 0.4, 0.4));
   return rects;
@@ -626,7 +635,9 @@ function Trees() {
     const groups = groupsOf(scene);
     for (const p of groups.Tree ?? []) {
       if (!/foliage/i.test(p.material.name)) continue;
-      p.material.alphaTest = 0.22;
+      p.material.alphaTest = 0.3;
+      p.material.transparent = false;
+      p.material.depthWrite = true;
       p.material.side = DoubleSide;
     }
     return groups;
@@ -710,9 +721,39 @@ function Lobby() {
   );
 }
 
-export function Entrance() {
+function SalesTotems({ offers }: { offers: SpaceOffer[] }) {
+  const tex = useMemo(() => totemTexture(offers), [offers]);
+  useEffect(() => () => tex.dispose(), [tex]);
+  return (
+    <>
+      {TOTEMS.map(([x, z]) => (
+        <group key={x} position={[x, LOBBY.floor, z]}>
+          <mesh position={[0, 0.06, 0]}>
+            <boxGeometry args={[1.1, 0.12, 0.5]} />
+            <meshStandardMaterial color="#1a1b20" metalness={0.6} roughness={0.35} />
+          </mesh>
+          <mesh position={[0, 1.25, 0]}>
+            <boxGeometry args={[1.3, 2.2, 0.12]} />
+            <meshStandardMaterial color="#121318" metalness={0.5} roughness={0.3} />
+          </mesh>
+          <mesh position={[0, 1.27, 0.065]}>
+            <planeGeometry args={[1.16, 1.94]} />
+            <meshBasicMaterial map={tex} toneMapped={false} />
+          </mesh>
+          <mesh position={[0, 1.27, -0.065]} rotation={[0, Math.PI, 0]}>
+            <planeGeometry args={[1.16, 1.94]} />
+            <meshBasicMaterial map={tex} toneMapped={false} />
+          </mesh>
+        </group>
+      ))}
+    </>
+  );
+}
+
+export function Entrance({ offers }: { offers: SpaceOffer[] }) {
   return (
     <group>
+      {offers.length > 0 && <SalesTotems offers={offers} />}
       <SlidingDoors />
       <Canopy />
       <Runway />

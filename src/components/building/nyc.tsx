@@ -56,6 +56,8 @@ export function liftOverNyc(p: Vector3) {
   if (p.y < NYC_TOP + 8 && inNyc(p.x, p.z, 6)) p.y = NYC_TOP + 8;
 }
 
+/** Streets and pavements: kept matte so they don't mirror the studio lights' violet and blue. */
+const GROUND = /streets|lanes|side_?walks|curb|wet/i;
 const NO_WINDOWS = /foliage|bark|grass|street|lanes|side_?walks|curb|decal|trash|sign|assets|roof|green|wet/i;
 
 /**
@@ -66,6 +68,16 @@ const NO_WINDOWS = /foliage|bark|grass|street|lanes|side_?walks|curb|decal|trash
 function nightFacade(src: MeshStandardMaterial): MeshStandardMaterial {
   const m = src.clone();
   const windows = !NO_WINDOWS.test(src.name);
+  if (/foliage/i.test(src.name)) {
+    m.transparent = false;
+    m.alphaTest = 0.4;
+    m.depthWrite = true;
+  }
+  if (GROUND.test(src.name)) {
+    m.roughness = 1;
+    m.metalness = 0;
+    m.envMapIntensity = 0.25;
+  }
   if (/glass/i.test(src.name)) {
     m.color.set('#2c3a4c');
     m.metalness = 0.85;
@@ -148,17 +160,24 @@ export function NycTower({ at }: { at: readonly [number, number, number] }) {
   );
 }
 
-/** Real New York blocks (brick, limestone, glass, water towers, fire escapes, street trees) around the tower. */
-export function NycBlocks() {
-  const { scene } = useGLTF(NYC_URL, DRACO_PATH);
+/** Built by scripts/build-lite-assets.mts: the same block without clutter and with 256 px textures, for phones. */
+export const NYC_LITE_URL = '/models/nyc-block-lite.glb';
+
+/**
+ * Real New York blocks (brick, limestone, glass, water towers, fire escapes, street trees) around the tower.
+ * `lite` (phones): the light model, and only the four blocks next to the tower; the far skyline fills the rest.
+ */
+export function NycBlocks({ lite = false }: { lite?: boolean }) {
+  const { scene } = useGLTF(lite ? NYC_LITE_URL : NYC_URL, DRACO_PATH);
+  const shown = useMemo(() => (lite ? BLOCKS.filter((b) => !b.lite) : BLOCKS), [lite]);
   const { blocks, materials } = useMemo(() => {
     const { root, materials } = prepareNyc(scene);
-    return { blocks: BLOCKS.map((b, i) => (i === 0 ? root : b.lite ? liteCopy(root) : root.clone(true))), materials };
-  }, [scene]);
+    return { blocks: shown.map((b, i) => (i === 0 ? root : b.lite ? liteCopy(root) : root.clone(true))), materials };
+  }, [scene, shown]);
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials]);
   return (
     <group>
-      {BLOCKS.map((b, i) => (
+      {shown.map((b, i) => (
         <group key={i} position={[b.x, LIFT, b.z]} rotation-y={b.rot}>
           <primitive object={blocks[i]!} position={[-SOURCE_CENTER.x, 0, -SOURCE_CENTER.z]} />
         </group>
