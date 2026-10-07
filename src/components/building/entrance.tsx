@@ -332,7 +332,6 @@ function Canopy() {
         <planeGeometry args={[6.4, 1]} />
         <meshBasicMaterial map={sign} transparent toneMapped={false} color="#f5f0ff" />
       </mesh>
-      <pointLight position={[0, CANOPY.y - 1, midZ]} color="#ffe0b5" intensity={40} distance={16} decay={1.5} />
     </group>
   );
 }
@@ -470,7 +469,6 @@ function Lifts() {
       {CABS.map((c, i) => (
         <group key={c.door} position={[c.door, y, CAB_Z]} scale={[c.sx, CAB_SCALE, CAB_SCALE]}>
           <primitive object={cabins[i]!} />
-          <pointLight position={[-0.9, 2.6, -0.2]} color="#fff1dc" intensity={6} distance={4.5} decay={1.6} />
         </group>
       ))}
       <mesh position={[(BANK.x0 + BANK.x1) / 2, (top + LOBBY.ceiling) / 2, CAB_FRONT_Z - 0.1]}>
@@ -622,7 +620,6 @@ function HeroCar() {
       <group ref={turn} position={[0, 0.3, 0]}>
         <primitive object={car} />
       </group>
-      <pointLight position={[0, 6, 2]} color="#ffffff" intensity={45} distance={14} decay={1.6} />
     </group>
   );
 }
@@ -716,8 +713,25 @@ function Lobby() {
           <meshBasicMaterial color={DOWNLIGHT} toneMapped={false} />
         </mesh>
       ))}
-      <pointLight position={[0, LOBBY.ceiling - 1.2, 3]} color="#ffe0b5" intensity={60} distance={30} decay={1.4} />
     </group>
+  );
+}
+
+/**
+ * The canopy, lobby, cabin and showroom-car lights. Mounted with the scene, not with the models they
+ * light, because adding a light makes three.js recompile every material in the city.
+ */
+export function EntranceLights() {
+  const y = LOBBY.floor;
+  return (
+    <>
+      <pointLight position={[0, CANOPY.y - 1, (CANOPY.z0 + CANOPY.z1) / 2]} color="#ffe0b5" intensity={40} distance={16} decay={1.5} />
+      <pointLight position={[0, LOBBY.ceiling - 1.2, 3]} color="#ffe0b5" intensity={60} distance={30} decay={1.4} />
+      <pointLight position={[PODIUM.x, 6, PODIUM.z + 2]} color="#ffffff" intensity={45} distance={14} decay={1.6} />
+      {CABS.map((c) => (
+        <pointLight key={c.door} position={[c.door - 0.9 * c.sx, y + 2.6 * CAB_SCALE, CAB_Z - 0.2 * CAB_SCALE]} color="#fff1dc" intensity={6} distance={4.5} decay={1.6} />
+      ))}
+    </>
   );
 }
 

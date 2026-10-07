@@ -11,6 +11,7 @@ import { RESIDENCE_NAME, RESIDENTS } from '@/content/residents';
 import { CAB_SCALE, ELEVATOR_URL, PlantParts, RECEPTION_URL, cloneCabin, slideDoors } from './entrance';
 import type { Rect } from './layout';
 import { NYC_TOP } from './nyc';
+import { Prewarmed } from './prewarm';
 import { LOUNGE_URL, disposeGroups, groupsOf } from './realistic';
 import { AVENUE_Z } from './roads';
 import { type Item, WALK } from './shared';
@@ -688,7 +689,9 @@ export function Residence({ level, rideTo, offers }: { level: number; rideTo: nu
           <ResidenceLobby key={l} offers={offers} />
         ) : (
           <Suspense key={l} fallback={null}>
-            <Apartment level={l} />
+            <Prewarmed>
+              <Apartment level={l} />
+            </Prewarmed>
           </Suspense>
         ),
       )}

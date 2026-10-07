@@ -1,20 +1,21 @@
 'use client';
 
 import { Environment, Html, Lightformer, OrbitControls, useGLTF } from '@react-three/drei';
-import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AdditiveBlending, CanvasTexture, Color, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type PerspectiveCamera, type PointLight, SRGBColorSpace, Texture, Vector3 } from 'three';
+import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AdditiveBlending, CanvasTexture, Color, type Group, MeshBasicMaterial, MeshStandardMaterial, type PerspectiveCamera, type PointLight, SRGBColorSpace, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { BUILDING_URL, CLEAR_HEIGHT, FLOOR_COUNT, PLATE, PROGRAM_COPY, ROOF_Y, floorY, prepareBuilding, programOf } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
 import { KIT_URL } from '@/components/three/kit-model';
 import { Atmosphere } from './atmosphere';
 import { City, GOBLIN_URL, NEIGHBOUR_AT, SIGNS_URL, TRAFFIC_A_URL, fadeByDay } from './city';
-import { ELEVATOR_URL, Entrance, FloorLift, FloorLiftLight, FOUNTAIN_URL, HERO_CAR_URL, PLANTS_URL, RECEPTION_URL, TREE_URL, WAITING_URL } from './entrance';
+import { ELEVATOR_URL, Entrance, EntranceLights, FloorLift, FloorLiftLight, FOUNTAIN_URL, HERO_CAR_URL, PLANTS_URL, RECEPTION_URL, TREE_URL, WAITING_URL } from './entrance';
 import { EXEC_URL, Furnishing, Interior, LOUNGE_URL, MEET_URL } from './interior';
 import { buildLayout, type Layout } from './layout';
 import { NycBlocks, NycTower, liftOverNyc } from './nyc';
 import { RES_LOBBY_URL, RES_LOFT_URL, Residence, ResidenceEntrance, ResidenceLights, homeZone } from './residence';
+import { Prewarmed } from './prewarm';
 import { CLIP, CLIP_PLANES, CUT, WALK } from './shared';
 import { SKY, applyDayTints, dayTint, type SkyMode } from './sky';
 import { WalkRig } from './walk';
@@ -357,7 +358,9 @@ function Building({ selected, layout }: { selected: number | null; layout: Layou
       <Interior layout={layout} selected={selected} exec={parts.exec} />
       {selected !== null && (
         <Suspense fallback={null}>
-          <Furnishing selected={selected} layout={layout} builtDesk={parts.desk} />
+          <Prewarmed>
+            <Furnishing selected={selected} layout={layout} builtDesk={parts.desk} />
+          </Prewarmed>
         </Suspense>
       )}
     </group>
@@ -376,39 +379,6 @@ function preload(...lists: string[][]) {
 
 /** The residence lobby and its lift, wanted the moment someone heads for the residence. */
 const RESIDENCE_MODELS = [RES_LOBBY_URL, ELEVATOR_URL, LOUNGE_URL, RECEPTION_URL];
-
-/**
- * Kept mounted but hidden until needed, with its shaders compiled and textures on the GPU as soon
- * as it has loaded, so walking in doesn't stall on first draw.
- */
-function Prewarmed({ visible, children }: { visible: boolean; children: ReactNode }) {
-  const ref = useRef<Group>(null);
-  const { gl, scene, camera } = useThree();
-  useEffect(() => {
-    const g = ref.current;
-    if (!g) return;
-    const was = g.visible;
-    g.visible = true;
-    g.traverse((o) => {
-      for (const m of [(o as Mesh).material].flat() as (Material | undefined)[]) {
-        if (!m) continue;
-        for (const v of Object.values(m)) if (v instanceof Texture) gl.initTexture(v);
-      }
-    });
-    gl.compileAsync(g, camera, scene).catch(() => {});
-    g.visible = was;
-  }, [gl, scene, camera]);
-  return (
-    <group ref={ref} visible={visible}>
-      {children}
-    </group>
-  );
-}
-
-function Ready({ onReady }: { onReady: () => void }) {
-  useEffect(() => onReady(), [onReady]);
-  return null;
-}
 
 export default function BuildingScene({
   active,
@@ -483,16 +453,30 @@ ull elsewhere. */
         <Lightformer form="rect" intensity={0.6} color="#a78bfa" position={[-10, 3, 5]} scale={[6, 6, 1]} rotation-y={Math.PI / 2} />
         <Lightformer form="ring" intensity={0.5} color="#ffffff" position={[0, 10, 0]} scale={4} rotation-x={Math.PI / 2} />
       </Environment>
+      <EntranceLights />
+      <ResidenceLights level={walking ? home : null} />
+      <FloorLiftLight floor={walking ? selected : null} />
+      <SelectedFloorLights selected={selected} />
       <Suspense fallback={null}>
-        <City street={street} />
+        <Prewarmed>
+          <City street={street} />
+        </Prewarmed>
       </Suspense>
       <Suspense fallback={null}>
-        <NycBlocks lite={lite} />
+        <Prewarmed>
+          <NycBlocks lite={lite} />
+        </Prewarmed>
       </Suspense>
       <Suspense fallback={null}>
-        <Building selected={selected} layout={layout} />
+        <Prewarmed onShown={ready}>
+          <Building selected={selected} layout={layout} />
+          <Crown />
+          <ResidenceEntrance />
+        </Prewarmed>
         <Suspense fallback={null}>
-          <NycTower at={NEIGHBOUR_AT} />
+          <Prewarmed>
+            <NycTower at={NEIGHBOUR_AT} />
+          </Prewarmed>
         </Suspense>
         {(street || warm) && (
           <Suspense fallback={null}>
@@ -501,9 +485,7 @@ ull elsewhere. */
             </Prewarmed>
           </Suspense>
         )}
-        <Crown />
         {!walking && <FloorHits selected={selected} onSelect={onSelect} />}
-        <ResidenceEntrance />
         {walking && <WalkRig zone={home !== null ? homeZone(home) : (selected ?? 'street')} layout={layout} onElevator={onElevator} />}
         {(warm || inHome) && (
           <Suspense fallback={null}>
@@ -512,12 +494,8 @@ ull elsewhere. */
             </Prewarmed>
           </Suspense>
         )}
-        <ResidenceLights level={walking ? home : null} />
         {walking && [...new Set([selected, rideTo])].map((f) => f !== null && <FloorLift key={f} floor={f} />)}
-        <FloorLiftLight floor={walking ? selected : null} />
-        <SelectedFloorLights selected={selected} />
         <CutawayAnimator selected={selected} walking={walking} />
-        <Ready onReady={ready} />
       </Suspense>
       <CameraRig selected={selected} walking={walking} />
     </Canvas>

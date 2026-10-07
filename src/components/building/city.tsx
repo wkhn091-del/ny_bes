@@ -21,6 +21,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { inNyc } from './nyc';
+import { Prewarmed } from './prewarm';
 import { AVENUE_HALF, AVENUE_Z, RIVER, SIDE_X, gridStrips, nearGrid } from './roads';
 import { seededRandom } from './shared';
 import { DAY_UNIFORM, SKY } from './sky';
@@ -491,8 +492,10 @@ export function City({ street = true }: { street?: boolean }) {
       <Signals />
       {street && (
         <Suspense fallback={null}>
-          <Traffic />
-          <RoadSigns />
+          <Prewarmed>
+            <Traffic />
+            <RoadSigns />
+          </Prewarmed>
         </Suspense>
       )}
     </group>
