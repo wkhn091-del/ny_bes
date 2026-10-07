@@ -25,6 +25,7 @@ import {
   Vector3,
 } from 'three';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { useLiteDevice } from '@/components/three/capability';
 import { DRACO_PATH } from '@/components/three/desk-model';
 import { ModelInstances } from './interior';
 import { disposeGroups, groupsOf } from './realistic';
@@ -55,6 +56,8 @@ export const TRAFFIC_A_URL = '/models/spacehub-traffic-a.glb';
 /** "Fictional supercar - V12 Goblin" by ollitei and "Lamborghini Revuelto" by DRIVER-FIRE (both CC-BY-4.0; badges removed). */
 export const GOBLIN_URL = '/models/car-goblin.glb';
 export const REVUELTO_URL = '/models/car-revuelto.glb';
+/** Built by scripts/build-lite-assets.mts: about a quarter of the triangles, for phones. */
+export const REVUELTO_LITE_URL = '/models/car-revuelto-lite.glb';
 /** "Road Signs" by FrodoUndead (CC-BY-4.0): crossing, speed limit, signal ahead, no U-turn. */
 export const SIGNS_URL = '/models/road-signs.glb';
 
@@ -602,7 +605,7 @@ type Car = { li: number; model: number; pos: number; cruise: number; speed: numb
 export function Traffic() {
   const a = useGLTF(TRAFFIC_A_URL, DRACO_PATH);
   const goblin = useGLTF(GOBLIN_URL, DRACO_PATH);
-  const revuelto = useGLTF(REVUELTO_URL, DRACO_PATH);
+  const revuelto = useGLTF(useLiteDevice() ? REVUELTO_LITE_URL : REVUELTO_URL, DRACO_PATH);
   const models = useMemo(
     () => [carModel(a.scene, CAR_SPECS.traffic), carModel(goblin.scene, CAR_SPECS.goblin), carModel(revuelto.scene, CAR_SPECS.revuelto)],
     [a.scene, goblin.scene, revuelto.scene],

@@ -21,7 +21,7 @@ import {
 import { keepWalkable, obstaclesFor, type Layout } from './layout';
 import { NYC_TOP, inNyc } from './nyc';
 import { WALK } from './shared';
-import { HOME_SPAWN, type HomeZone, homeArrival, homeFlight, homeFloorAt, homeLiftRoute, homeObstacles, inHomeLift, isHomeZone } from './residence';
+import { HOME_SPAWN, RESIDENCE_READY, type HomeZone, homeArrival, homeFlight, homeFloorAt, homeLiftRoute, homeObstacles, inHomeLift, isHomeZone } from './residence';
 import { WALK_SIGNAL } from './walk-signal';
 
 export type Zone = number | 'street' | HomeZone;
@@ -205,7 +205,7 @@ export function WalkRig({ zone, layout, onElevator }: { zone: Zone; layout: Layo
       n.auto = false;
       if (keyDirection(n.keys, n.yaw, dir)) p.addScaledVector(dir, WALK_SPEED * delta);
       keepWalkable(p, blocked.rects, blocked.bounds);
-    } else if (n.path.length > 0) {
+    } else if (n.path.length > 0 && !(n.flying && home && n.path.length === 1 && !RESIDENCE_READY.lobby)) {
       const target = n.path[0]!;
       if (n.flying) dir.subVectors(target, p);
       else dir.set(target.x - p.x, 0, target.z - p.z);

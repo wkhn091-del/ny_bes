@@ -5,7 +5,9 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { CanvasTexture, Color, DoubleSide, type Group, type Object3D, type InstancedMesh, type Material, Matrix4, type Mesh, MeshStandardMaterial, SRGBColorSpace, ShaderMaterial } from 'three';
 import { CLEAR_HEIGHT, COLUMNS, COLUMN_SIZE, CORE, DOOR, ELEVATOR, FRONT_PIERS, LOBBY, PLINTH, floorY } from '@/components/three/building-model';
+import { useLiteDevice } from '@/components/three/capability';
 import { DRACO_PATH } from '@/components/three/desk-model';
+import { REVUELTO_LITE_URL } from './streets';
 import type { KitPart } from '@/components/three/kit-model';
 import { AVENUE_HALF, AVENUE_Z, CROSSWALK, SIDE_X } from './city';
 import { ModelInstances } from './interior';
@@ -601,7 +603,7 @@ function ReceptionDesk() {
 
 /** The hero car on a slowly turning podium with an LED ring and its own light. */
 function HeroCar() {
-  const { scene } = useGLTF(HERO_CAR_URL, DRACO_PATH);
+  const { scene } = useGLTF(useLiteDevice() ? REVUELTO_LITE_URL : HERO_CAR_URL, DRACO_PATH);
   const car = useMemo(() => scene.clone(true), [scene]);
   const turn = useRef<Group>(null);
   useFrame((_, delta) => {

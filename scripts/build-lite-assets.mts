@@ -3,6 +3,8 @@
  *
  *   public/models/nyc-block-lite.glb  nyc-block.glb without street furniture, fire escapes and rooftop
  *                                     clutter, textures at 256 px (seen from the overview on phones)
+ *   public/models/car-revuelto-lite.glb  the showroom car simplified to about an eighth of its
+ *                                     triangles, textures at 512 px (the podium and traffic on phones)
  *
  *   npx tsx scripts/build-lite-assets.mts
  */
@@ -10,8 +12,9 @@ import { statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, KHRDracoMeshCompression } from '@gltf-transform/extensions';
-import { dedup, prune, textureCompress } from '@gltf-transform/functions';
+import { dedup, prune, simplify, textureCompress, weld } from '@gltf-transform/functions';
 import draco3d from 'draco3dgltf';
+import { MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
 
 /** Same list the scene uses for its far blocks (src/components/building/nyc.tsx). */
@@ -34,3 +37,17 @@ doc.createExtension(KHRDracoMeshCompression).setRequired(true).setEncoderOptions
 const out = resolve(models, 'nyc-block-lite.glb');
 await io.write(out, doc);
 console.log(`nyc-block-lite.glb ${(statSync(out).size / 1024 / 1024).toFixed(2)} MB`);
+
+const car = await io.read(resolve(models, 'car-revuelto.glb'));
+await MeshoptSimplifier.ready;
+await car.transform(
+  weld(),
+  simplify({ simplifier: MeshoptSimplifier, ratio: 0.12, error: 0.01 }),
+  prune(),
+  dedup(),
+  textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [512, 512], quality: 80 }),
+);
+car.createExtension(KHRDracoMeshCompression).setRequired(true).setEncoderOptions({ method: KHRDracoMeshCompression.EncoderMethod.EDGEBREAKER });
+const carOut = resolve(models, 'car-revuelto-lite.glb');
+await io.write(carOut, car);
+console.log(`car-revuelto-lite.glb ${(statSync(carOut).size / 1024 / 1024).toFixed(2)} MB`);

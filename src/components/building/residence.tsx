@@ -177,6 +177,9 @@ export const HOME_SPAWN = {
   z: HALL.z + FOYER.z1 - 1.4,
   yaw: 0,
 };
+/** Whether the lobby has loaded and compiled; the flight in waits at the doors until it has. */
+export const RESIDENCE_READY = { lobby: false };
+
 /** In the street, under the residence's canopy. */
 export const RESIDENCE_DOOR = {
   x: HALL.x + FOYER_DOOR_X,

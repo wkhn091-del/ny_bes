@@ -1,6 +1,6 @@
 'use client';
 
-import { Environment, Html, Lightformer, OrbitControls, useGLTF } from '@react-three/drei';
+import { Environment, Html, Lightformer, OrbitControls, PerformanceMonitor, useGLTF } from '@react-three/drei';
 import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AdditiveBlending, CanvasTexture, Color, type Group, MeshBasicMaterial, MeshStandardMaterial, type PerspectiveCamera, type PointLight, SRGBColorSpace, Vector3 } from 'three';
@@ -10,11 +10,12 @@ import { DRACO_PATH } from '@/components/three/desk-model';
 import { KIT_URL } from '@/components/three/kit-model';
 import { Atmosphere } from './atmosphere';
 import { City, GOBLIN_URL, NEIGHBOUR_AT, SIGNS_URL, TRAFFIC_A_URL, fadeByDay } from './city';
+import { REVUELTO_LITE_URL } from './streets';
 import { ELEVATOR_URL, Entrance, EntranceLights, FloorLift, FloorLiftLight, FOUNTAIN_URL, HERO_CAR_URL, PLANTS_URL, RECEPTION_URL, TREE_URL, WAITING_URL } from './entrance';
 import { EXEC_URL, Furnishing, Interior, LOUNGE_URL, MEET_URL } from './interior';
 import { buildLayout, type Layout } from './layout';
 import { NycBlocks, NycTower, liftOverNyc } from './nyc';
-import { RES_LOBBY_URL, RES_LOFT_URL, Residence, ResidenceEntrance, ResidenceLights, homeZone } from './residence';
+import { RES_LOBBY_URL, RES_LOFT_URL, RESIDENCE_READY, Residence, ResidenceEntrance, ResidenceLights, homeZone } from './residence';
 import { Prewarmed } from './prewarm';
 import { CLIP, CLIP_PLANES, CUT, WALK } from './shared';
 import { SKY, applyDayTints, dayTint, type SkyMode } from './sky';
@@ -368,7 +369,7 @@ function Building({ selected, layout }: { selected: number | null; layout: Layou
 }
 
 /** Street level: cars, signs, the entrance and the lobby. */
-const STREET_MODELS = [TRAFFIC_A_URL, GOBLIN_URL, HERO_CAR_URL, SIGNS_URL, TREE_URL, FOUNTAIN_URL, PLANTS_URL, RECEPTION_URL, WAITING_URL, ELEVATOR_URL, LOUNGE_URL];
+const streetModels = (lite: boolean) => [TRAFFIC_A_URL, GOBLIN_URL, lite ? REVUELTO_LITE_URL : HERO_CAR_URL, SIGNS_URL, TREE_URL, FOUNTAIN_URL, PLANTS_URL, RECEPTION_URL, WAITING_URL, ELEVATOR_URL, LOUNGE_URL];
 /** Furniture for an open floor. */
 const FLOOR_MODELS = [KIT_URL, EXEC_URL, MEET_URL];
 
@@ -420,22 +421,32 @@ ull elsewhere. */
   }, [onReady]);
   const inHome = walking && home !== null;
   const [warm, setWarm] = useState(false);
+  const [warmStreet, setWarmStreet] = useState(!lite);
   useEffect(() => {
     if (!shown) return;
     preload(RESIDENCE_MODELS);
-    if (!lite) preload(STREET_MODELS, FLOOR_MODELS, [RES_LOFT_URL]);
-    if (walking && home === null) preload(STREET_MODELS);
+    if (!lite) preload(streetModels(lite), FLOOR_MODELS, [RES_LOFT_URL]);
+    if (walking && home === null) preload(streetModels(lite));
     if (inHome) preload([RES_LOFT_URL]);
-    const id = window.setTimeout(() => {
-      setWarm(true);
-      if (lite) preload(STREET_MODELS);
-    }, lite ? 2500 : 1200);
+    const id = window.setTimeout(() => setWarm(true), lite ? 600 : 1200);
     return () => window.clearTimeout(id);
   }, [shown, lite, walking, home, inHome]);
+  useEffect(() => {
+    if (!shown || !lite || inHome || warmStreet) return;
+    const id = window.setTimeout(() => {
+      preload(streetModels(lite));
+      setWarmStreet(true);
+    }, 6000);
+    return () => window.clearTimeout(id);
+  }, [shown, lite, inHome, warmStreet]);
   const street = !lite || (walking && home === null);
+  const [dpr, setDpr] = useState(lite ? 1.25 : 1.6);
+  const lobbyShown = useCallback(() => {
+    RESIDENCE_READY.lobby = true;
+  }, []);
   return (
     <Canvas
-      dpr={lite ? [1, 1.25] : [1, 1.6]}
+      dpr={[lite ? 0.8 : 1, dpr]}
       frameloop={active ? 'always' : 'never'}
       camera={{ position: [130, 70, 190], fov: ORBIT_FOV, near: ORBIT_NEAR, far: 2600 }}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
@@ -443,6 +454,13 @@ ull elsewhere. */
         gl.localClippingEnabled = true;
       }}
     >
+      <PerformanceMonitor
+        bounds={() => (lite ? [24, 50] : [30, 55])}
+        flipflops={4}
+        onDecline={() => setDpr((d) => Math.max(lite ? 0.8 : 1, d - 0.2))}
+        onIncline={() => setDpr((d) => Math.min(lite ? 1.25 : 1.6, d + 0.1))}
+        onFallback={() => setDpr(lite ? 0.8 : 1)}
+      />
       <color attach="background" args={['#060912']} />
       <fog attach="fog" args={['#0b1020', 320, 1200]} />
       <Atmosphere mode={skyMode} />
@@ -478,7 +496,7 @@ ull elsewhere. */
             <NycTower at={NEIGHBOUR_AT} />
           </Prewarmed>
         </Suspense>
-        {(street || warm) && (
+        {(street || (warm && warmStreet)) && (
           <Suspense fallback={null}>
             <Prewarmed visible={street}>
               <Entrance offers={offers} />
@@ -489,7 +507,7 @@ ull elsewhere. */
         {walking && <WalkRig zone={home !== null ? homeZone(home) : (selected ?? 'street')} layout={layout} onElevator={onElevator} />}
         {(warm || inHome) && (
           <Suspense fallback={null}>
-            <Prewarmed visible={inHome}>
+            <Prewarmed visible={inHome} onShown={lobbyShown}>
               <Residence level={inHome ? home : 0} rideTo={inHome ? homeRideTo : null} offers={offers} />
             </Prewarmed>
           </Suspense>
