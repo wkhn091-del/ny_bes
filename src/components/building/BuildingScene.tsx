@@ -1,9 +1,9 @@
 'use client';
 
 import { Environment, Html, Lightformer, OrbitControls, useGLTF } from '@react-three/drei';
-import { Canvas, useFrame, type ThreeEvent } from '@react-three/fiber';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AdditiveBlending, CanvasTexture, Color, type Group, MeshBasicMaterial, MeshStandardMaterial, type PerspectiveCamera, type PointLight, SRGBColorSpace, Vector3 } from 'three';
+import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
+import { type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AdditiveBlending, CanvasTexture, Color, type Group, type Material, type Mesh, MeshBasicMaterial, MeshStandardMaterial, type PerspectiveCamera, type PointLight, SRGBColorSpace, Texture, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { BUILDING_URL, CLEAR_HEIGHT, FLOOR_COUNT, PLATE, PROGRAM_COPY, ROOF_Y, floorY, prepareBuilding, programOf } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
@@ -374,6 +374,37 @@ function preload(...lists: string[][]) {
   for (const url of lists.flat()) useGLTF.preload(url, DRACO_PATH);
 }
 
+/** The residence lobby and its lift, wanted the moment someone heads for the residence. */
+const RESIDENCE_MODELS = [RES_LOBBY_URL, ELEVATOR_URL, LOUNGE_URL, RECEPTION_URL];
+
+/**
+ * Kept mounted but hidden until needed, with its shaders compiled and textures on the GPU as soon
+ * as it has loaded, so walking in doesn't stall on first draw.
+ */
+function Prewarmed({ visible, children }: { visible: boolean; children: ReactNode }) {
+  const ref = useRef<Group>(null);
+  const { gl, scene, camera } = useThree();
+  useEffect(() => {
+    const g = ref.current;
+    if (!g) return;
+    const was = g.visible;
+    g.visible = true;
+    g.traverse((o) => {
+      for (const m of [(o as Mesh).material].flat() as (Material | undefined)[]) {
+        if (!m) continue;
+        for (const v of Object.values(m)) if (v instanceof Texture) gl.initTexture(v);
+      }
+    });
+    gl.compileAsync(g, camera, scene).catch(() => {});
+    g.visible = was;
+  }, [gl, scene, camera]);
+  return (
+    <group ref={ref} visible={visible}>
+      {children}
+    </group>
+  );
+}
+
 function Ready({ onReady }: { onReady: () => void }) {
   useEffect(() => onReady(), [onReady]);
   return null;
@@ -417,12 +448,21 @@ ull elsewhere. */
     setShown(true);
     onReady();
   }, [onReady]);
+  const inHome = walking && home !== null;
+  const [warm, setWarm] = useState(false);
   useEffect(() => {
     if (!shown) return;
-    if (!lite) preload(STREET_MODELS, FLOOR_MODELS);
-    if (walking) preload(STREET_MODELS, [RES_LOBBY_URL, RES_LOFT_URL]);
-  }, [shown, lite, walking]);
-  const street = !lite || walking;
+    preload(RESIDENCE_MODELS);
+    if (!lite) preload(STREET_MODELS, FLOOR_MODELS, [RES_LOFT_URL]);
+    if (walking && home === null) preload(STREET_MODELS);
+    if (inHome) preload([RES_LOFT_URL]);
+    const id = window.setTimeout(() => {
+      setWarm(true);
+      if (lite) preload(STREET_MODELS);
+    }, lite ? 2500 : 1200);
+    return () => window.clearTimeout(id);
+  }, [shown, lite, walking, home, inHome]);
+  const street = !lite || (walking && home === null);
   return (
     <Canvas
       dpr={lite ? [1, 1.25] : [1, 1.6]}
@@ -454,18 +494,22 @@ ull elsewhere. */
         <Suspense fallback={null}>
           <NycTower at={NEIGHBOUR_AT} />
         </Suspense>
-        {street && (
+        {(street || warm) && (
           <Suspense fallback={null}>
-            <Entrance offers={offers} />
+            <Prewarmed visible={street}>
+              <Entrance offers={offers} />
+            </Prewarmed>
           </Suspense>
         )}
         <Crown />
         {!walking && <FloorHits selected={selected} onSelect={onSelect} />}
         <ResidenceEntrance />
         {walking && <WalkRig zone={home !== null ? homeZone(home) : (selected ?? 'street')} layout={layout} onElevator={onElevator} />}
-        {walking && home !== null && (
+        {(warm || inHome) && (
           <Suspense fallback={null}>
-            <Residence level={home} rideTo={homeRideTo} offers={offers} />
+            <Prewarmed visible={inHome}>
+              <Residence level={inHome ? home : 0} rideTo={inHome ? homeRideTo : null} offers={offers} />
+            </Prewarmed>
           </Suspense>
         )}
         <ResidenceLights level={walking ? home : null} />

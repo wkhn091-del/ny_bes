@@ -274,10 +274,7 @@ export function BuildingShowcase({ className, sales }: { className?: string; sal
           onClick={() => {
             WALK_SIGNAL.goElevator = true;
           }}
-          className={clsx(
-            'absolute right-3 flex items-center gap-1.5 rounded-full bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition-transform hover:scale-[1.03] active:scale-[0.97] sm:bottom-4 sm:right-4',
-            selected === null ? 'bottom-16' : 'bottom-40',
-          )}
+          className="absolute bottom-16 right-3 flex items-center gap-1.5 rounded-full bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition-transform hover:scale-[1.03] active:scale-[0.97] sm:bottom-4 sm:right-4"
         >
           <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
           למעלית
@@ -482,7 +479,7 @@ export function BuildingShowcase({ className, sales }: { className?: string; sal
             </span>
             <span className="hidden text-2xs text-white/75 sm:block">{home === 0 ? 'לובי עם בריכה וקונסיירז׳ · 8 דירות דופלקס' : `דיירים מדומים · ${RESIDENTS[home - 1]!.note}`}</span>
           </div>
-          <div className="absolute bottom-16 left-3 flex flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
+          <div className="absolute bottom-16 left-3 flex flex-col items-start gap-2 sm:bottom-4 sm:left-4 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
               onClick={leaveWalk}
@@ -507,13 +504,12 @@ export function BuildingShowcase({ className, sales }: { className?: string; sal
         <>
           <div className={clsx(chip, 'pointer-events-none absolute left-1/2 top-3 flex max-w-[calc(100%-6rem)] -translate-x-1/2 flex-col items-center px-3.5 py-1.5 text-center')}>
             <span className="text-xs font-semibold sm:text-sm">הרחוב והלובי</span>
-            <span className="flex items-center gap-1 text-2xs text-white/75">
+            <span className="hidden items-center gap-1 text-2xs text-white/75 sm:flex">
               <Hand className="h-3 w-3 shrink-0" aria-hidden="true" />
-              <span className="sm:hidden">הקישו על הכניסה ותגיעו למעלית לבד</span>
-              <span className="hidden sm:inline">הקישו על הכניסה, או לכו בעצמכם · W A S D או לחיצה על הקרקע</span>
+              הקישו על הכניסה, או לכו בעצמכם · W A S D או לחיצה על הקרקע
             </span>
           </div>
-          <div className="absolute bottom-16 left-3 flex flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
+          <div className="absolute bottom-16 left-3 flex flex-col items-start gap-2 sm:bottom-4 sm:left-4 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
               onClick={leaveWalk}
@@ -540,13 +536,12 @@ export function BuildingShowcase({ className, sales }: { className?: string; sal
             <span className="text-xs font-semibold sm:text-sm">
               קומה {selected + 1} · {copy.title}
             </span>
-            <span className="flex items-center gap-1 text-2xs text-white/75">
+            <span className="hidden items-center gap-1 text-2xs text-white/75 sm:flex">
               <Hand className="h-3 w-3" aria-hidden="true" />
-              <span className="sm:hidden">גררו להסתכל · הקישו על הרצפה ללכת</span>
-              <span className="hidden sm:inline">גררו כדי להסתכל, לחצו על הרצפה כדי ללכת · או W A S D</span>
+              גררו כדי להסתכל, לחצו על הרצפה כדי ללכת · או W A S D
             </span>
           </div>
-          <div className="absolute bottom-16 left-3 flex flex-wrap items-center gap-2 sm:bottom-4 sm:left-4">
+          <div className="absolute bottom-16 left-3 flex flex-col items-start gap-2 sm:bottom-4 sm:left-4 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
               onClick={leaveWalk}

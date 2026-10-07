@@ -2,14 +2,17 @@
 
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useRef } from 'react';
 import { CanvasTexture, DoubleSide, type Group, type MeshStandardMaterial, type Object3D, SRGBColorSpace } from 'three';
+import { PLATE, ROOF_Y } from '@/components/three/building-model';
 import { DRACO_PATH } from '@/components/three/desk-model';
 import { clamp } from '@/components/three/first-person';
 import { RESIDENCE_NAME, RESIDENTS } from '@/content/residents';
 import { CAB_SCALE, ELEVATOR_URL, PlantParts, RECEPTION_URL, cloneCabin, slideDoors } from './entrance';
 import type { Rect } from './layout';
+import { NYC_TOP } from './nyc';
 import { LOUNGE_URL, disposeGroups, groupsOf } from './realistic';
+import { AVENUE_Z } from './roads';
 import { type Item, WALK } from './shared';
 import { WALK_SIGNAL } from './walk-signal';
 import type { SpaceOffer } from './offers';
@@ -198,13 +201,22 @@ export function homeLiftRoute(zone: HomeZone, x: number, z: number): { x: number
   return route;
 }
 
-/** Flight from the orbit camera: over the avenue, then down to the residence's doors. */
+/**
+ * Flight from the orbit camera: up above every roof, across to the avenue in front of the residence,
+ * straight down into the open road, then in through the doors. No leg cuts through a building.
+ */
 export function homeFlight(from: { x: number; y: number; z: number }): { x: number; y: number; z: number }[] {
+  const behind = from.z < PLATE.z + 25;
+  const y = Math.max(from.y, NYC_TOP + 12, behind ? ROOF_Y + 25 : 0);
+  const lane = AVENUE_Z + 2;
+  const x = RESIDENCE_DOOR.x;
   return [
-    { x: from.x, y: Math.max(from.y, 90), z: from.z },
-    { x: RESIDENCE_DOOR.x, y: 60, z: 95 },
-    { x: RESIDENCE_DOOR.x, y: 5, z: RESIDENCE_DOOR.z + 6 },
-    { x: RESIDENCE_DOOR.x, y: 1.6, z: RESIDENCE_DOOR.z },
+    { x: from.x, y, z: from.z },
+    { x: from.x, y, z: lane },
+    { x, y, z: lane },
+    { x, y: 7, z: lane },
+    { x, y: 2.2, z: RESIDENCE_DOOR.z + 5 },
+    { x, y: 1.6, z: RESIDENCE_DOOR.z },
     { x: HOME_SPAWN.x, y: HALL_FLOOR + 1.6, z: HOME_SPAWN.z },
   ];
 }
@@ -669,7 +681,19 @@ export function ResidenceEntrance() {
 /** Whichever part of the residence you are walking: the lobby (0) or apartment 1–8, plus a ride's destination. */
 export function Residence({ level, rideTo, offers }: { level: number; rideTo: number | null; offers: SpaceOffer[] }) {
   const shown = [...new Set([level, rideTo ?? level])];
-  return <>{shown.map((l) => (l === 0 ? <ResidenceLobby key={l} offers={offers} /> : <Apartment key={l} level={l} />))}</>;
+  return (
+    <>
+      {shown.map((l) =>
+        l === 0 ? (
+          <ResidenceLobby key={l} offers={offers} />
+        ) : (
+          <Suspense key={l} fallback={null}>
+            <Apartment level={l} />
+          </Suspense>
+        ),
+      )}
+    </>
+  );
 }
 
 /**
