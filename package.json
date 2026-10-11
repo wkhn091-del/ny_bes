@@ -20,7 +20,7 @@
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.1",
     "@sanity/image-url": "^2.1.1",
-    "@sentry/nextjs": "^11.4.0",
+    "@sentry/nextjs": "^11.5.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "@upstash/ratelimit": "^2.2.0",
